@@ -10,6 +10,25 @@ npm install
 npm run build
 ```
 
+Or run the full local bootstrap:
+
+```bash
+./scripts/bootstrap.sh
+```
+
+## Client Setup
+
+Generate reviewed setup for your agent client:
+
+```bash
+uv run skillroute mcp config --client codex
+uv run skillroute mcp config --client claude-code
+uv run skillroute mcp config --client claude-desktop
+```
+
+See [Agent Setup](agent-setup.md) for client-specific paths, scopes, and plugin
+packaging notes.
+
 ## Run
 
 ```bash

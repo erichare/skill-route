@@ -14,6 +14,12 @@ from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
 from skillroute.metadata import default_overlay_path, review_metadata_overlay, write_metadata_overlay
+from skillroute.mcp_setup import (
+    CLAUDE_SCOPE_CHOICES,
+    MCP_CLIENT_CHOICES,
+    build_mcp_setup,
+    render_mcp_setup,
+)
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
 
@@ -162,6 +168,32 @@ def build_parser() -> argparse.ArgumentParser:
     astra_search_parser.add_argument("--limit", type=int, default=10)
     astra_search_parser.add_argument("--json", action="store_true", dest="as_json")
     astra_search_parser.set_defaults(func=cmd_backend_astra_search)
+
+    mcp_parser = subparsers.add_parser("mcp", help="Generate MCP client setup")
+    mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command", required=True)
+    mcp_config_parser = mcp_subparsers.add_parser(
+        "config",
+        help="Print SkillRoute MCP setup for Codex, Claude Code, or Claude Desktop",
+    )
+    mcp_config_parser.add_argument("--client", choices=MCP_CLIENT_CHOICES, required=True)
+    mcp_config_parser.add_argument("--repo-root", type=Path, default=None)
+    mcp_config_parser.add_argument(
+        "--catalog",
+        type=Path,
+        dest="mcp_catalog",
+        default=None,
+        help="Catalog path for generated MCP env. Can also be passed globally before mcp.",
+    )
+    add_backend_argument(mcp_config_parser)
+    mcp_config_parser.add_argument("--server-name", default="skillroute")
+    mcp_config_parser.add_argument(
+        "--scope",
+        choices=CLAUDE_SCOPE_CHOICES,
+        default="user",
+        help="Claude Code scope for generated claude mcp add commands.",
+    )
+    mcp_config_parser.add_argument("--json", action="store_true", dest="as_json")
+    mcp_config_parser.set_defaults(func=cmd_mcp_config)
 
     bridge_parser = subparsers.add_parser("bridge", help="JSON stdin/stdout bridge for MCP wrappers")
     bridge_parser.add_argument("operation", choices=["route", "search", "inspect"])
@@ -440,6 +472,21 @@ def cmd_backend_astra_search(args: argparse.Namespace) -> None:
         skill = catalog.get_skill(row["skill_id"])
         name = skill.name if skill else row["skill_id"]
         print(f"{name} ({row['skill_id']}) score={row['score']}")
+
+
+def cmd_mcp_config(args: argparse.Namespace) -> None:
+    payload = build_mcp_setup(
+        client=args.client,
+        repo_root=args.repo_root,
+        catalog=args.mcp_catalog or args.catalog,
+        backend=args.backend,
+        server_name=args.server_name,
+        claude_scope=args.scope,
+    )
+    if args.as_json:
+        print_json(payload)
+        return
+    print(render_mcp_setup(payload))
 
 
 def run_astra_command(operation):
