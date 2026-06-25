@@ -389,6 +389,94 @@ def test_cli_mcp_config_claude_desktop_prints_config_snippet(
     assert str(repo_root / "mcp" / "build" / "index.js") in output
 
 
+def test_cli_mcp_config_vscode_outputs_add_mcp_command(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    catalog_path = tmp_path / "catalog.db"
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "vscode",
+            "--repo-root",
+            str(repo_root),
+            "--catalog",
+            str(catalog_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["client"] == "vscode"
+    assert payload["setup_method"] == "command"
+    assert payload["install_command"].startswith("code --add-mcp")
+    assert payload["install_command_parts"][0:2] == ["code", "--add-mcp"]
+    add_payload = json.loads(payload["install_command_parts"][2])
+    assert add_payload["name"] == "skillroute"
+    assert add_payload["command"] == "node"
+    assert add_payload["args"] == [str(repo_root / "mcp" / "build" / "index.js")]
+    assert payload["config"]["servers"]["skillroute"]["env"]["SKILLROUTE_CATALOG_PATH"] == str(catalog_path)
+
+
+def test_cli_mcp_config_windsurf_outputs_config_path(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "windsurf",
+            "--repo-root",
+            str(repo_root),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    server = payload["config"]["mcpServers"]["skillroute"]
+    assert payload["client"] == "windsurf"
+    assert payload["setup_method"] == "json_merge"
+    assert payload["config_path"] == "~/.codeium/windsurf/mcp_config.json"
+    assert server["command"] == "node"
+    assert server["args"] == [str(repo_root / "mcp" / "build" / "index.js")]
+
+
+def test_cli_mcp_config_cursor_is_print_only(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "cursor",
+            "--repo-root",
+            str(repo_root),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["client"] == "cursor"
+    assert payload["setup_method"] == "print_only"
+    assert payload["install_command"] is None
+    assert any("snippet-only" in note for note in payload["notes"])
+
+
 def test_cli_backend_status_reports_astra_without_secrets(
     tmp_path: Path,
     fixture_skills_root: Path,

@@ -5,9 +5,9 @@ REPO_URL="${SKILLROUTE_REPO_URL:-https://github.com/erichare/skill-route.git}"
 REF="${SKILLROUTE_REF:-main}"
 INSTALL_DIR="${SKILLROUTE_INSTALL_DIR:-}"
 ASSUME_YES="${SKILLROUTE_ASSUME_YES:-0}"
-WRITE_BOB_CONFIG="${SKILLROUTE_WRITE_BOB_CONFIG:-prompt}"
+CLIENT_SETUP="${SKILLROUTE_CLIENT_SETUP:-prompt}"
+CLIENTS="${SKILLROUTE_CLIENTS:-auto}"
 INDEX_LOCAL_SKILLS="${SKILLROUTE_INDEX_LOCAL_SKILLS:-prompt}"
-BOB_CONFIG_PATH="${SKILLROUTE_BOB_CONFIG_PATH:-$HOME/.bob/mcp.json}"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   BLUE="$(printf '\033[38;5;27m')"
@@ -34,11 +34,12 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
 
 Options:
-  --yes                 Accept prompts.
+  --yes                 Accept prompts, including detected client setup.
   --install-dir PATH    Install or update SkillRoute at PATH.
   --repo URL            Git repository URL.
   --ref REF             Git branch, tag, or ref. Defaults to main.
-  --no-bob-write        Do not write ~/.bob/mcp.json.
+  --clients SPEC        auto, all, or comma-separated client ids.
+  --no-client-setup     Detect clients but do not configure them.
   --help                Show this help.
 
 Environment:
@@ -46,9 +47,9 @@ Environment:
   SKILLROUTE_REPO_URL
   SKILLROUTE_REF
   SKILLROUTE_ASSUME_YES=1
-  SKILLROUTE_WRITE_BOB_CONFIG=0|1|prompt
+  SKILLROUTE_CLIENT_SETUP=prompt|0|1
+  SKILLROUTE_CLIENTS=auto|all|ibm-bob,codex,claude-code,claude-desktop,vscode,windsurf,cursor
   SKILLROUTE_INDEX_LOCAL_SKILLS=0|1|prompt
-  SKILLROUTE_BOB_CONFIG_PATH
 EOF
 }
 
@@ -82,8 +83,16 @@ while [[ $# -gt 0 ]]; do
       REF="$2"
       shift 2
       ;;
-    --no-bob-write)
-      WRITE_BOB_CONFIG=0
+    --clients)
+      if [[ $# -lt 2 ]]; then
+        echo "--clients requires auto, all, or a comma-separated client list" >&2
+        exit 1
+      fi
+      CLIENTS="$2"
+      shift 2
+      ;;
+    --no-client-setup)
+      CLIENT_SETUP=0
       shift
       ;;
     --help|-h)
@@ -112,8 +121,8 @@ say() {
 banner() {
   say "${BLUE}${BOLD}"
   cat <<'EOF'
-IBM Bob + SkillRoute
-Local skill routing for agentic development
+SkillRoute
+Local-first skill routing for agent builders
 EOF
   say "${RESET}"
 }
@@ -237,44 +246,26 @@ prepare_checkout() {
   fi
 }
 
-write_bob_config() {
-  local payload
-  payload="$(uv run skillroute mcp config --client ibm-bob --json)"
-  SKILLROUTE_MCP_PAYLOAD="$payload" BOB_CONFIG_PATH="$BOB_CONFIG_PATH" uv run python - <<'PY'
-from __future__ import annotations
-
-import datetime as dt
-import json
-import os
-import shutil
-from pathlib import Path
-
-target = Path(os.environ["BOB_CONFIG_PATH"]).expanduser()
-payload = json.loads(os.environ["SKILLROUTE_MCP_PAYLOAD"])
-server = payload["config"]["mcpServers"]["skillroute"]
-
-data: dict[str, object] = {}
-backup_path: Path | None = None
-if target.exists():
-    try:
-        data = json.loads(target.read_text(encoding="utf-8") or "{}")
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"Existing Bob MCP config is not valid JSON: {target}: {exc}") from exc
-    timestamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
-    backup_path = target.with_name(f"{target.name}.bak-{timestamp}")
-    shutil.copy2(target, backup_path)
-
-servers = data.setdefault("mcpServers", {})
-if not isinstance(servers, dict):
-    raise SystemExit(f"Bob MCP config has a non-object mcpServers field: {target}")
-servers["skillroute"] = server
-
-target.parent.mkdir(parents=True, exist_ok=True)
-target.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-print(f"Wrote {target}")
-if backup_path:
-    print(f"Backup {backup_path}")
-PY
+run_client_setup() {
+  local setup_args
+  setup_args=(
+    "python"
+    "-m"
+    "skillroute.client_setup"
+    "setup"
+    "--repo-root"
+    "$INSTALL_DIR"
+    "--catalog"
+    "$INSTALL_DIR/.skillroute/catalog.db"
+    "--clients"
+    "$CLIENTS"
+    "--mode"
+    "$CLIENT_SETUP"
+  )
+  if is_truthy "$ASSUME_YES"; then
+    setup_args+=("--yes")
+  fi
+  uv run "${setup_args[@]}"
 }
 
 main() {
@@ -282,9 +273,10 @@ main() {
   local using_current=0
 
   banner
-  say "This installer sets up SkillRoute locally and prepares IBM Bob MCP config."
+  say "This installer sets up SkillRoute locally, then detects agent clients for MCP setup."
   say "Repository: $REPO_URL"
   say "Ref:        $REF"
+  say "Clients:    $CLIENTS"
 
   detected_root="$(local_checkout_root || true)"
   if [[ -z "$INSTALL_DIR" && -n "$detected_root" ]]; then
@@ -322,27 +314,23 @@ main() {
 
   run_confirmed "Check local retrieval backend" uv run skillroute backend status --backend local
 
-  step "IBM Bob MCP setup"
-  if should_do "$WRITE_BOB_CONFIG" "Write or update IBM Bob MCP config at $BOB_CONFIG_PATH"; then
-    write_bob_config
-    ok "IBM Bob MCP config is ready"
-  else
-    warn "IBM Bob MCP config was not written"
-    say "Generate it later with:"
-    say "  cd $INSTALL_DIR"
-    say "  uv run skillroute mcp config --client ibm-bob"
-  fi
+  step "Detect and set up agent clients"
+  run_client_setup
 
   say ""
-  say "${BLUE}${BOLD}SkillRoute is ready for IBM Bob.${RESET}"
+  say "${BLUE}${BOLD}SkillRoute is ready.${RESET}"
   say "Try:"
   say "  cd $INSTALL_DIR"
   say "  uv run skillroute route \"Build an MCP server that exposes routing tools\""
   say ""
-  say "Other agent setup:"
+  say "Manual client setup:"
+  say "  uv run skillroute mcp config --client ibm-bob"
   say "  uv run skillroute mcp config --client codex"
   say "  uv run skillroute mcp config --client claude-code"
   say "  uv run skillroute mcp config --client claude-desktop"
+  say "  uv run skillroute mcp config --client vscode"
+  say "  uv run skillroute mcp config --client windsurf"
+  say "  uv run skillroute mcp config --client cursor"
 }
 
 main "$@"
