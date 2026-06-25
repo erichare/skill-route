@@ -5,11 +5,38 @@ requests without a hosted service.
 
 ## One Command First
 
+For a fresh IBM Bob setup:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+```
+
+The installer confirms each step, installs SkillRoute into
+`~/.skillroute/skill-route` by default, builds the MCP server, indexes starter
+skills, and offers to write Bob's MCP config with a timestamped backup.
+
+For unattended use:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --yes
+```
+
+Useful installer options:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+  | SKILLROUTE_INSTALL_DIR=/opt/skillroute bash
+
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --ref main --no-bob-write
+```
+
+Already in a checkout:
+
 ```bash
 ./scripts/bootstrap.sh
 ```
 
-The bootstrap script:
+The installer and bootstrap script:
 
 - installs the Python dev environment
 - installs Node dependencies for the MCP server

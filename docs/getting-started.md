@@ -5,7 +5,24 @@ skills.
 
 ## Install
 
-Fast path:
+One-line installer for IBM Bob:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+```
+
+The installer confirms each step before it clones or updates SkillRoute,
+installs dependencies, builds the MCP server, indexes starter skills, and writes
+or offers to write Bob MCP config. It installs to `~/.skillroute/skill-route` by
+default.
+
+For unattended local/dev use:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --yes
+```
+
+Already in a checkout:
 
 ```bash
 ./scripts/bootstrap.sh
