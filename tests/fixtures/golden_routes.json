@@ -1,0 +1,9 @@
+[
+  {
+    "name": "mcp",
+    "request": "Create a TypeScript MCP stdio server with registered tools",
+    "expected_skill_names": ["mcp-server-patterns"],
+    "expect_clarification": false
+  }
+]
+

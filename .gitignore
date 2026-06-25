@@ -1,0 +1,13 @@
+.coverage
+.pytest_cache/
+.ruff_cache/
+.skillroute/
+.venv/
+__pycache__/
+*.egg-info/
+*.pyc
+
+mcp/build/
+mcp/node_modules/
+node_modules/
+

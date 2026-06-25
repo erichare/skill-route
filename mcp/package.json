@@ -1,0 +1,22 @@
+{
+  "name": "@skillroute/mcp-server",
+  "version": "0.1.0",
+  "description": "SkillRoute MCP stdio server",
+  "type": "module",
+  "bin": {
+    "skillroute-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "smoke": "node tests/mcp-smoke.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}

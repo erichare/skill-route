@@ -1,0 +1,21 @@
+[
+  {
+    "name": "mcp server route",
+    "request": "Build an MCP server that exposes route, search, and inspect tools",
+    "expected_skill_names": ["mcp-server-patterns"],
+    "expect_clarification": false
+  },
+  {
+    "name": "python eval route",
+    "request": "Add pytest golden route eval coverage for a Python router",
+    "expected_skill_names": ["python-testing"],
+    "expect_clarification": false
+  },
+  {
+    "name": "astra backend route",
+    "request": "Use Astra DB Data API as a vector backend for skill search",
+    "expected_skill_names": ["astra-vector-backend"],
+    "expect_clarification": false
+  }
+]
+
