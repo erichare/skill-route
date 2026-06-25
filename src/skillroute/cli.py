@@ -195,6 +195,12 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_config_parser.add_argument("--json", action="store_true", dest="as_json")
     mcp_config_parser.set_defaults(func=cmd_mcp_config)
 
+    ui_parser = subparsers.add_parser("ui", help="Launch the local Skill Atlas web UI")
+    ui_parser.add_argument("--host", default="127.0.0.1")
+    ui_parser.add_argument("--port", type=int, default=8765)
+    ui_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+    ui_parser.set_defaults(func=cmd_ui)
+
     bridge_parser = subparsers.add_parser("bridge", help="JSON stdin/stdout bridge for MCP wrappers")
     bridge_parser.add_argument("operation", choices=["route", "search", "inspect"])
     bridge_parser.set_defaults(func=cmd_bridge, bridge=True)
@@ -487,6 +493,17 @@ def cmd_mcp_config(args: argparse.Namespace) -> None:
         print_json(payload)
         return
     print(render_mcp_setup(payload))
+
+
+def cmd_ui(args: argparse.Namespace) -> None:
+    from skillroute.ui_server import run_ui
+
+    run_ui(
+        catalog_path=args.catalog,
+        host=args.host,
+        port=args.port,
+        open_browser=not args.no_open,
+    )
 
 
 def run_astra_command(operation):
