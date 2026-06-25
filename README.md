@@ -47,7 +47,16 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
 
 ## Screenshots
 
+Skill Atlas, the local graph UI for exploring skills, relationships, and route
+previews:
+
+![SkillRoute Skill Atlas](docs/assets/screenshot-skill-atlas.png)
+
+CLI route output:
+
 ![SkillRoute route output](docs/assets/screenshot-route.svg)
+
+Trace inspection:
 
 ![SkillRoute trace inspection](docs/assets/screenshot-traces.svg)
 
