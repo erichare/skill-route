@@ -42,7 +42,12 @@ class Router:
             else [],
         )
         self.catalog.record_route_trace(
-            {"request": request, "repo": str(repo_path) if repo_path else None, "limit": limit},
+            {
+                "request": request,
+                "repo": str(repo_path) if repo_path else None,
+                "limit": limit,
+                "backend": self.backend.name,
+            },
             response,
         )
         return response
@@ -54,7 +59,8 @@ class Router:
         rows: list[dict[str, Any]] = []
         for skill in skills:
             lexical = lexical_score(query_tokens, skill)
-            backend_score = float(backend_hits.get(skill.id, {}).get("score", 0.0))
+            backend_hit = backend_hits.get(skill.id, {})
+            backend_score = float(backend_hit.get("score", 0.0))
             total = lexical + backend_score
             if total <= 0:
                 continue
@@ -65,6 +71,9 @@ class Router:
                     "name": skill.name,
                     "description": skill.description,
                     "score": round(total, 4),
+                    "lexical_score": round(lexical, 4),
+                    "backend": backend_hit.get("backend"),
+                    "backend_score": round(backend_score, 4),
                     "tags": skill.tags,
                     "evidence": snippets,
                 }
@@ -85,21 +94,29 @@ class Router:
         candidates: list[RouteCandidate] = []
         for skill in skills:
             lexical = lexical_score(query_tokens, skill)
-            semantic = min(float(backend_hits.get(skill.id, {}).get("score", 0.0)) / 5.0, 1.0)
+            backend_hit = backend_hits.get(skill.id)
+            semantic = semantic_score(backend_hit)
             repo_context_score = repo_score(repo_context, skill)
             graph = graph_score(skill)
             total = (lexical * 0.5) + (semantic * 0.25) + (repo_context_score * 0.15) + (graph * 0.10)
             if total <= 0:
                 continue
             evidence = evidence_for(query_tokens, skill.excerpts)
-            confidence = max(0.0, min(total / 2.5, 0.99))
+            confidence = confidence_for(total, semantic)
             candidates.append(
                 RouteCandidate(
                     skill_id=skill.id,
                     name=skill.name,
                     description=skill.description,
                     confidence=round(confidence, 4),
-                    reasons=reasons_for(skill, lexical, semantic, repo_context_score, graph),
+                    reasons=reasons_for(
+                        skill,
+                        lexical,
+                        semantic,
+                        repo_context_score,
+                        graph,
+                        backend_name=str(backend_hit.get("backend")) if backend_hit else None,
+                    ),
                     evidence=evidence,
                     score_breakdown=ScoreBreakdown(
                         lexical=round(lexical, 4),
@@ -154,6 +171,20 @@ def lexical_score(query_tokens: set[str], skill: Any) -> float:
     return keyword_score(query_tokens, fields)
 
 
+def semantic_score(backend_hit: dict[str, Any] | None) -> float:
+    if not backend_hit:
+        return 0.0
+    score = max(float(backend_hit.get("score", 0.0)), 0.0)
+    backend = str(backend_hit.get("backend", ""))
+    if backend == "local-token":
+        return min(score / 5.0, 1.0)
+    return min(score, 1.0)
+
+
+def confidence_for(total: float, semantic: float) -> float:
+    return max(0.0, min(max(total / 2.5, semantic * 0.65), 0.99))
+
+
 def repo_score(repo_context: dict[str, Any], skill: Any) -> float:
     languages = set(repo_context.get("languages", []))
     skill_languages = set(skill.facets.get("language", []))
@@ -185,12 +216,20 @@ def evidence_for(query_tokens: set[str], excerpts: list[SkillExcerpt]) -> list[S
     return [excerpt for _, excerpt in ranked[:3]]
 
 
-def reasons_for(skill: Any, lexical: float, semantic: float, repo_context_score: float, graph: float) -> list[str]:
+def reasons_for(
+    skill: Any,
+    lexical: float,
+    semantic: float,
+    repo_context_score: float,
+    graph: float,
+    backend_name: str | None = None,
+) -> list[str]:
     reasons = []
     if lexical > 0:
         reasons.append("Matched request terms against skill name, description, tags, or excerpts.")
     if semantic > 0:
-        reasons.append("Local semantic/token retrieval returned this skill as a candidate.")
+        source = backend_name or "Retrieval backend"
+        reasons.append(f"{source} retrieval returned this skill as a candidate.")
     if repo_context_score > 0:
         reasons.append("Repository language signals align with this skill's language facets.")
     if graph > 0:

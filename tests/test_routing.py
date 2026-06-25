@@ -6,6 +6,20 @@ from skillroute.catalog import Catalog
 from skillroute.routing import Router
 
 
+class FixedBackend:
+    name = "astra-data-api"
+
+    def __init__(self, skill_id: str, score: float) -> None:
+        self.skill_id = skill_id
+        self.score = score
+
+    def upsert_skills(self, skills):
+        return []
+
+    def search(self, query, skills, limit=10):
+        return [{"skill_id": self.skill_id, "backend": self.name, "score": self.score}]
+
+
 def test_router_ranks_expected_skill_for_mcp_request(indexed_catalog: Catalog, tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -33,6 +47,21 @@ def test_search_returns_evidence(indexed_catalog: Catalog) -> None:
 
     assert rows[0]["name"] == "astra-vector-backend"
     assert rows[0]["evidence"]
+
+
+def test_router_uses_remote_backend_similarity_as_semantic_signal(indexed_catalog: Catalog) -> None:
+    skill = indexed_catalog.get_skill("astra-vector-backend")
+    assert skill is not None
+
+    response = Router(indexed_catalog, backend=FixedBackend(skill.id, 0.92)).route(
+        "remote-only embedding match",
+        limit=3,
+    )
+
+    assert response.candidates[0].name == "astra-vector-backend"
+    assert response.candidates[0].score_breakdown.semantic == 0.92
+    assert response.candidates[0].confidence > 0.5
+    assert any("astra-data-api" in reason for reason in response.candidates[0].reasons)
 
 
 def test_router_and_search_collapse_duplicate_skill_names(tmp_path: Path) -> None:

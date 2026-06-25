@@ -75,7 +75,13 @@ uv run skillroute backend astra create-collection --options-json '{"vector": {"s
 uv run skillroute backend astra upsert
 uv run skillroute backend astra upsert --json --include-refs
 uv run skillroute backend astra search "build an MCP server"
+uv run skillroute route "build an MCP server" --backend astra
 ```
+
+`skillroute route`, `skillroute search`, and the MCP `skillroute.route` /
+`skillroute.search` tools accept `backend: "astra"` to use Astra retrieval in
+the hybrid candidate set. Set `SKILLROUTE_BACKEND=astra` to make Astra the
+default backend for route/search calls.
 
 ## MCP Server
 

@@ -11,16 +11,23 @@ const server = new McpServer({
   version: "0.1.0"
 });
 
+const backendSchema = z
+  .enum(["local", "astra"])
+  .optional()
+  .describe("Optional retrieval backend. Defaults to SKILLROUTE_BACKEND or local.");
+
 const routeSchema = {
   request: z.string().min(1).describe("User request or task to route to skills."),
   repo: z.string().optional().describe("Optional repository path for lightweight context signals."),
   catalog: z.string().optional().describe("Optional SkillRoute SQLite catalog path."),
+  backend: backendSchema,
   limit: z.number().int().min(1).max(20).optional().describe("Maximum number of ranked skills.")
 };
 
 const searchSchema = {
   query: z.string().min(1).describe("Search query for the skill catalog."),
   catalog: z.string().optional().describe("Optional SkillRoute SQLite catalog path."),
+  backend: backendSchema,
   limit: z.number().int().min(1).max(50).optional().describe("Maximum number of results.")
 };
 
@@ -47,7 +54,7 @@ server.registerTool(
   "skillroute.search",
   {
     title: "Search Skills",
-    description: "Search indexed skills using hybrid metadata, lexical, and local semantic signals.",
+    description: "Search indexed skills using hybrid metadata, lexical, and selected backend retrieval signals.",
     inputSchema: searchSchema
   },
   async (args) => {
@@ -82,4 +89,3 @@ function jsonContent(value: unknown) {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-

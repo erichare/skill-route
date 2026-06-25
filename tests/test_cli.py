@@ -154,3 +154,105 @@ def test_cli_backend_astra_search_prints_catalog_skill_name(
     main(["--catalog", str(catalog_path), "backend", "astra", "search", "mcp", "--limit", "1"])
 
     assert "mcp-server-patterns" in capsys.readouterr().out
+
+
+def test_cli_route_uses_selected_astra_backend(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    catalog_skill = json.loads(
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "skillroute",
+                "--catalog",
+                str(catalog_path),
+                "inspect",
+                "astra-vector-backend",
+                "--json",
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+    )
+
+    class FakeAstra:
+        name = "astra-data-api"
+
+        def search(self, query, skills, limit=10):
+            return [{"skill_id": catalog_skill["id"], "backend": self.name, "score": 0.94}]
+
+    monkeypatch.setattr("skillroute.cli.AstraDataAPIBackend.from_env", lambda: FakeAstra())
+
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "route",
+            "remote-only embedding match",
+            "--backend",
+            "astra",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out.split("\n", 1)[1])
+    assert payload["candidates"][0]["name"] == "astra-vector-backend"
+    assert payload["candidates"][0]["score_breakdown"]["semantic"] == 0.94
+
+
+def test_cli_search_uses_selected_astra_backend(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    catalog_skill = json.loads(
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "skillroute",
+                "--catalog",
+                str(catalog_path),
+                "inspect",
+                "astra-vector-backend",
+                "--json",
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+    )
+
+    class FakeAstra:
+        name = "astra-data-api"
+
+        def search(self, query, skills, limit=10):
+            return [{"skill_id": catalog_skill["id"], "backend": self.name, "score": 0.94}]
+
+    monkeypatch.setattr("skillroute.cli.AstraDataAPIBackend.from_env", lambda: FakeAstra())
+
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "search",
+            "remote-only embedding match",
+            "--backend",
+            "astra",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out.split("\n", 1)[1])
+    assert payload[0]["name"] == "astra-vector-backend"
+    assert payload[0]["backend_score"] == 0.94

@@ -2,19 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from skillroute.backends import AstraDataAPIBackend, AstraDataAPIError
+from skillroute.backends import AstraDataAPIBackend, AstraDataAPIError, LocalTokenBackend, RetrievalBackend
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
 from skillroute.metadata import default_overlay_path, review_metadata_overlay, write_metadata_overlay
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
+
+
+BACKEND_CHOICES = ("local", "local-token", "astra", "astra-data-api")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -42,12 +46,14 @@ def build_parser() -> argparse.ArgumentParser:
     route_parser.add_argument("request")
     route_parser.add_argument("--repo", type=Path, default=None)
     route_parser.add_argument("--limit", type=int, default=5)
+    add_backend_argument(route_parser)
     route_parser.add_argument("--json", action="store_true", dest="as_json")
     route_parser.set_defaults(func=cmd_route)
 
     search_parser = subparsers.add_parser("search", help="Search indexed skills")
     search_parser.add_argument("query")
     search_parser.add_argument("--limit", type=int, default=10)
+    add_backend_argument(search_parser)
     search_parser.add_argument("--json", action="store_true", dest="as_json")
     search_parser.set_defaults(func=cmd_search)
 
@@ -72,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run evals against a temporary isolated catalog.",
     )
+    add_backend_argument(eval_run_parser)
     eval_run_parser.add_argument("--json", action="store_true", dest="as_json")
     eval_run_parser.set_defaults(func=cmd_eval_run)
 
@@ -148,8 +155,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def add_backend_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--backend",
+        choices=BACKEND_CHOICES,
+        default=None,
+        help="Retrieval backend for route/search. Defaults to SKILLROUTE_BACKEND or local.",
+    )
+
+
 def catalog_from_args(args: argparse.Namespace) -> Catalog:
     return Catalog(args.catalog or default_catalog_path())
+
+
+def backend_from_args(args: argparse.Namespace) -> RetrievalBackend:
+    try:
+        return backend_from_name(getattr(args, "backend", None))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def backend_from_name(name: str | None) -> RetrievalBackend:
+    configured = (name or os.environ.get("SKILLROUTE_BACKEND") or "local").strip().lower()
+    if configured in {"local", "local-token"}:
+        return LocalTokenBackend()
+    if configured in {"astra", "astra-data-api"}:
+        return AstraDataAPIBackend.from_env()
+    valid = ", ".join(BACKEND_CHOICES)
+    raise ValueError(f"Unsupported SkillRoute backend {configured!r}; expected one of: {valid}")
 
 
 def cmd_index(args: argparse.Namespace) -> None:
@@ -160,7 +193,7 @@ def cmd_index(args: argparse.Namespace) -> None:
 
 def cmd_route(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    response = Router(catalog).route(args.request, repo=args.repo, limit=args.limit)
+    response = Router(catalog, backend=backend_from_args(args)).route(args.request, repo=args.repo, limit=args.limit)
     if args.as_json:
         print_json(response)
         return
@@ -169,7 +202,7 @@ def cmd_route(args: argparse.Namespace) -> None:
 
 def cmd_search(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    rows = Router(catalog).search(args.query, limit=args.limit)
+    rows = Router(catalog, backend=backend_from_args(args)).search(args.query, limit=args.limit)
     if args.as_json:
         print_json(rows)
         return
@@ -216,7 +249,7 @@ def cmd_eval_run(args: argparse.Namespace) -> None:
         catalog = Catalog(Path(temp_dir) / "catalog.db") if temp_dir else catalog_from_args(args)
         for root in args.index_root:
             catalog.index_root(root)
-        results = run_golden_routes(Router(catalog), args.cases)
+        results = run_golden_routes(Router(catalog, backend=backend_from_args(args)), args.cases)
     if args.as_json:
         print_json(results)
         return
@@ -372,7 +405,7 @@ def count_ref_statuses(refs: list[dict[str, Any]]) -> dict[str, int]:
 def cmd_bridge(args: argparse.Namespace) -> None:
     payload = json.loads(sys.stdin.read() or "{}")
     catalog = Catalog(payload.get("catalog") or args.catalog or default_catalog_path())
-    router = Router(catalog)
+    router = Router(catalog, backend=backend_from_name(payload.get("backend")))
     if args.operation == "route":
         result = router.route(
             payload["request"],
