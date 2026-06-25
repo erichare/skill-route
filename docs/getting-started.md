@@ -5,14 +5,32 @@ skills.
 
 ## Install
 
-Fast path:
+One-line installer for IBM Bob:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+```
+
+The installer confirms each step before it clones or updates SkillRoute,
+installs dependencies, builds the MCP server, indexes starter skills, and writes
+or offers to write Bob MCP config. It installs to `~/.skillroute/skill-route` by
+default.
+
+For unattended local/dev use:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --yes
+```
+
+Already in a checkout:
 
 ```bash
 ./scripts/bootstrap.sh
 ```
 
 That installs the Python environment, installs and builds the MCP server, indexes
-the example skills, and prints copy-paste setup commands for Codex and Claude.
+the example skills, and prints copy-paste setup commands for IBM Bob, Codex, and
+Claude.
 
 Manual setup is also supported:
 
@@ -66,7 +84,7 @@ Dogfood discovery checks:
 
 ## Next
 
-- Connect SkillRoute to Codex or Claude with [agent setup](agent-setup.md).
+- Connect SkillRoute to IBM Bob, Codex, or Claude with [agent setup](agent-setup.md).
 - Configure [Astra retrieval](astra-backend.md) when you want remote vectorize
   search.
 - Use [metadata overlays](metadata-overlays.md) to review inferred facets and

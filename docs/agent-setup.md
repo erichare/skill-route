@@ -5,17 +5,77 @@ requests without a hosted service.
 
 ## One Command First
 
+For a fresh IBM Bob setup:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+```
+
+The installer confirms each step, installs SkillRoute into
+`~/.skillroute/skill-route` by default, builds the MCP server, indexes starter
+skills, and offers to write Bob's MCP config with a timestamped backup.
+
+For unattended use:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --yes
+```
+
+Useful installer options:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+  | SKILLROUTE_INSTALL_DIR=/opt/skillroute bash
+
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --ref main --no-bob-write
+```
+
+Already in a checkout:
+
 ```bash
 ./scripts/bootstrap.sh
 ```
 
-The bootstrap script:
+The installer and bootstrap script:
 
 - installs the Python dev environment
 - installs Node dependencies for the MCP server
 - builds `mcp/build/index.js`
 - indexes the example skills into `.skillroute/catalog.db`
-- prints setup commands for Codex, Claude Code, and Claude Desktop
+- prints setup commands for IBM Bob, Codex, Claude Code, and Claude Desktop
+
+## IBM Bob
+
+IBM Bob is the primary first integration for SkillRoute. Bob already supports MCP,
+and SkillRoute's local stdio server gives Bob three tools:
+
+- `skillroute.route`
+- `skillroute.search`
+- `skillroute.inspect_skill`
+
+Generate a Bob-ready `mcpServers` block:
+
+```bash
+uv run skillroute mcp config --client ibm-bob
+```
+
+Paste the generated JSON into one of Bob's MCP config files:
+
+```text
+Global:  ~/.bob/mcp.json
+Project: .bob/mcp.json
+```
+
+Use global config for your own machine. Use project config only when the paths
+are team-safe, for example through environment variables or a shared install
+location.
+
+In Bob, open the MCP settings panel and make sure MCP servers are enabled.
+SkillRoute does not add `alwaysAllow`; Bob should ask before using tools unless
+you explicitly change tool approval settings.
+
+See the official [IBM Bob MCP docs](https://bob.ibm.com/docs/ide/configuration/mcp/mcp-in-bob)
+and [transport guide](https://bob.ibm.com/docs/ide/configuration/mcp/server-transports).
 
 ## Codex
 
@@ -92,6 +152,7 @@ generator is intentionally close to that future shape. See the official
 ## Useful Options
 
 ```bash
+uv run skillroute mcp config --client ibm-bob --backend astra
 uv run skillroute mcp config --client codex --backend astra
 uv run skillroute mcp config --client claude-code --catalog /path/to/catalog.db
 uv run skillroute mcp config --client claude-desktop --server-name skillroute-dev

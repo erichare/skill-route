@@ -21,6 +21,7 @@ Or run the full local bootstrap:
 Generate reviewed setup for your agent client:
 
 ```bash
+uv run skillroute mcp config --client ibm-bob
 uv run skillroute mcp config --client codex
 uv run skillroute mcp config --client claude-code
 uv run skillroute mcp config --client claude-desktop

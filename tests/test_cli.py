@@ -293,6 +293,41 @@ def test_cli_mcp_config_codex_outputs_install_command_and_toml(
     assert any("MCP entrypoint not found yet" in note for note in payload["notes"])
 
 
+def test_cli_mcp_config_ibm_bob_outputs_bob_json(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    catalog_path = tmp_path / "catalog.db"
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "ibm-bob",
+            "--repo-root",
+            str(repo_root),
+            "--catalog",
+            str(catalog_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    server = payload["config"]["mcpServers"]["skillroute"]
+    assert payload["client"] == "ibm-bob"
+    assert payload["config_path"] == "~/.bob/mcp.json or .bob/mcp.json"
+    assert payload["install_command"] is None
+    assert server["command"] == "node"
+    assert server["args"] == [str(repo_root / "mcp" / "build" / "index.js")]
+    assert server["cwd"] == str(repo_root)
+    assert server["disabled"] is False
+    assert server["env"]["SKILLROUTE_CATALOG_PATH"] == str(catalog_path)
+    assert "alwaysAllow" not in server
+
+
 def test_cli_mcp_config_claude_code_outputs_scoped_command_and_json(
     tmp_path: Path,
     capsys,
@@ -348,7 +383,7 @@ def test_cli_mcp_config_claude_desktop_prints_config_snippet(
     )
 
     output = capsys.readouterr().out
-    assert "SkillRoute MCP setup for claude-desktop" in output
+    assert "SkillRoute MCP setup for Claude Desktop" in output
     assert "claude_desktop_config.json" in output
     assert '"SKILLROUTE_BACKEND": "astra"' in output
     assert str(repo_root / "mcp" / "build" / "index.js") in output
