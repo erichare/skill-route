@@ -11,11 +11,33 @@ questions when the match is uncertain.
 uv run skillroute index --root examples/skills
 uv run skillroute route "Build an MCP server that exposes routing tools"
 uv run skillroute inspect mcp-server-patterns
-uv run skillroute eval run --cases examples/evals/golden_routes.json
+uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
 ```
 
 The default catalog lives at `.skillroute/catalog.db` in the current directory.
 Use `--catalog <path>` or `SKILLROUTE_CATALOG_PATH` to point at another catalog.
+
+## Dogfooding Local Skills
+
+SkillRoute can discover the local skill roots used by Codex-style workflows:
+
+```bash
+uv run skillroute dogfood roots
+uv run skillroute dogfood index
+uv run skillroute route "Review a GitHub PR with exact file and line evidence"
+```
+
+The dogfood command looks for:
+
+- `~/.codex/skills`
+- `~/.agents/skills`
+- `~/.codex/plugins/cache`
+
+Use the example dogfood cases as a template for real routing regressions:
+
+```bash
+uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/dogfood_routes.json
+```
 
 ## MCP Server
 
@@ -46,3 +68,7 @@ the repository `src` directory for local development.
 - Retrieval adapters: local token backend now, with Astra DB/Data API and
   LangChain-compatible adapter contracts ready for real remote indexing.
 
+## Continuous Integration
+
+GitHub Actions runs Python tests/lint, example golden-route evals, and the MCP
+build/typecheck/smoke suite on pushes and pull requests.

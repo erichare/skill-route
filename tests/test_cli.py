@@ -42,3 +42,42 @@ def test_bridge_route_outputs_json(tmp_path: Path, fixture_skills_root: Path) ->
     payload = json.loads(completed.stdout)
     assert payload["candidates"][0]["name"] == "astra-vector-backend"
 
+
+def test_cli_eval_fresh_index_root_ignores_existing_catalog(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    capsys,
+) -> None:
+    noisy_root = tmp_path / "noisy"
+    noisy_skill = noisy_root / "mcp-distractor"
+    noisy_skill.mkdir(parents=True)
+    (noisy_skill / "SKILL.md").write_text(
+        """---
+name: mcp-distractor
+description: Build MCP servers with route search inspect tools over and over.
+---
+
+# MCP Distractor
+""",
+        encoding="utf-8",
+    )
+    catalog_path = tmp_path / "catalog.db"
+    cases = Path(__file__).parent / "fixtures" / "golden_routes.json"
+    main(["--catalog", str(catalog_path), "index", "--root", str(noisy_root)])
+
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "eval",
+            "run",
+            "--fresh",
+            "--index-root",
+            str(fixture_skills_root),
+            "--cases",
+            str(cases),
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "1/1 golden route cases passed" in output

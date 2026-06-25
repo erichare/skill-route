@@ -34,3 +34,29 @@ def test_search_returns_evidence(indexed_catalog: Catalog) -> None:
     assert rows[0]["name"] == "astra-vector-backend"
     assert rows[0]["evidence"]
 
+
+def test_router_and_search_collapse_duplicate_skill_names(tmp_path: Path) -> None:
+    for root_name in ("first", "second"):
+        skill_dir = tmp_path / root_name / "duplicate-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            """---
+name: duplicate-skill
+description: Build duplicate MCP routing fixtures.
+---
+
+# Duplicate Skill
+
+Use this skill for MCP routing.
+""",
+            encoding="utf-8",
+        )
+    catalog = Catalog(tmp_path / "catalog.db")
+    catalog.index_root(tmp_path / "first")
+    catalog.index_root(tmp_path / "second")
+
+    response = Router(catalog).route("MCP routing duplicate skill", limit=5)
+    rows = Router(catalog).search("MCP routing duplicate skill", limit=5)
+
+    assert [candidate.name for candidate in response.candidates].count("duplicate-skill") == 1
+    assert [row["name"] for row in rows].count("duplicate-skill") == 1

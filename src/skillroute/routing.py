@@ -70,7 +70,7 @@ class Router:
                 }
             )
         rows.sort(key=lambda row: row["score"], reverse=True)
-        return rows[:limit]
+        return dedupe_search_rows(rows)[:limit]
 
     def _score_candidates(
         self,
@@ -112,7 +112,7 @@ class Router:
                 )
             )
         candidates.sort(key=lambda candidate: candidate.score_breakdown.total, reverse=True)
-        return candidates[:limit]
+        return dedupe_candidates(candidates)[:limit]
 
     def _needs_clarification(self, candidates: list[RouteCandidate]) -> bool:
         if not candidates:
@@ -202,3 +202,26 @@ def reasons_for(skill: Any, lexical: float, semantic: float, repo_context_score:
         reasons.append(f"Known relationships: {', '.join(relation_names)}.")
     return reasons or ["Selected by fallback ranking."]
 
+
+def dedupe_candidates(candidates: list[RouteCandidate]) -> list[RouteCandidate]:
+    seen: set[str] = set()
+    unique: list[RouteCandidate] = []
+    for candidate in candidates:
+        key = candidate.name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def dedupe_search_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for row in rows:
+        key = str(row["name"]).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run tests
+        run: uv run --extra dev pytest
+
+      - name: Run lint
+        run: uv run --extra dev ruff check .
+
+      - name: Run example golden routes
+        run: uv run --extra dev skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
+
+  mcp:
+    name: MCP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Install MCP dependencies
+        working-directory: mcp
+        run: npm ci
+
+      - name: Build MCP server
+        working-directory: mcp
+        run: npm run build
+
+      - name: Typecheck MCP server
+        working-directory: mcp
+        run: npm run typecheck
+
+      - name: Smoke test MCP tools
+        working-directory: mcp
+        run: npm run smoke

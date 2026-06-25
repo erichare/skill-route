@@ -1,0 +1,21 @@
+[
+  {
+    "name": "mcp server implementation",
+    "request": "Build a local MCP server with tools, schemas, and stdio transport",
+    "expected_skill_names": ["mcp-server-patterns"],
+    "expect_clarification": false
+  },
+  {
+    "name": "python package testing",
+    "request": "Add pytest fixtures and golden regression tests for a Python CLI",
+    "expected_skill_names": ["python-testing"],
+    "expect_clarification": false
+  },
+  {
+    "name": "vector backend design",
+    "request": "Design an Astra DB Data API vector backend with LangChain compatibility",
+    "expected_skill_names": ["astra-vector-backend"],
+    "expect_clarification": false
+  }
+]
+

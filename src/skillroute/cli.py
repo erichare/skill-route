@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from contextlib import nullcontext
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from skillroute.catalog import Catalog, default_catalog_path
+from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
@@ -55,8 +58,31 @@ def build_parser() -> argparse.ArgumentParser:
     eval_subparsers = eval_parser.add_subparsers(dest="eval_command", required=True)
     eval_run_parser = eval_subparsers.add_parser("run", help="Run golden route evals")
     eval_run_parser.add_argument("--cases", type=Path, required=True)
+    eval_run_parser.add_argument(
+        "--index-root",
+        type=Path,
+        action="append",
+        default=[],
+        help="Index a skill root before running evals. Can be passed multiple times.",
+    )
+    eval_run_parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Run evals against a temporary isolated catalog.",
+    )
     eval_run_parser.add_argument("--json", action="store_true", dest="as_json")
     eval_run_parser.set_defaults(func=cmd_eval_run)
+
+    dogfood_parser = subparsers.add_parser("dogfood", help="Dogfood SkillRoute against local skill roots")
+    dogfood_subparsers = dogfood_parser.add_subparsers(dest="dogfood_command", required=True)
+    dogfood_roots_parser = dogfood_subparsers.add_parser("roots", help="List discoverable local skill roots")
+    dogfood_roots_parser.add_argument("--home", type=Path, default=None)
+    dogfood_roots_parser.add_argument("--json", action="store_true", dest="as_json")
+    dogfood_roots_parser.set_defaults(func=cmd_dogfood_roots)
+    dogfood_index_parser = dogfood_subparsers.add_parser("index", help="Index discoverable local skill roots")
+    dogfood_index_parser.add_argument("--home", type=Path, default=None)
+    dogfood_index_parser.add_argument("--json", action="store_true", dest="as_json")
+    dogfood_index_parser.set_defaults(func=cmd_dogfood_index)
 
     bridge_parser = subparsers.add_parser("bridge", help="JSON stdin/stdout bridge for MCP wrappers")
     bridge_parser.add_argument("operation", choices=["route", "search", "inspect"])
@@ -128,8 +154,12 @@ def cmd_inspect(args: argparse.Namespace) -> None:
 
 
 def cmd_eval_run(args: argparse.Namespace) -> None:
-    catalog = catalog_from_args(args)
-    results = run_golden_routes(Router(catalog), args.cases)
+    context = TemporaryDirectory() if args.fresh else nullcontext(None)
+    with context as temp_dir:
+        catalog = Catalog(Path(temp_dir) / "catalog.db") if temp_dir else catalog_from_args(args)
+        for root in args.index_root:
+            catalog.index_root(root)
+        results = run_golden_routes(Router(catalog), args.cases)
     if args.as_json:
         print_json(results)
         return
@@ -142,6 +172,44 @@ def cmd_eval_run(args: argparse.Namespace) -> None:
             print(f"  {note}")
     if passed != len(results):
         raise SystemExit(1)
+
+
+def cmd_dogfood_roots(args: argparse.Namespace) -> None:
+    roots = discover_default_skill_roots(args.home)
+    payload = [
+        {"path": str(root.path), "skill_count": root.skill_count}
+        for root in roots
+    ]
+    if args.as_json:
+        print_json(payload)
+        return
+    if not roots:
+        print("No default skill roots found.")
+        return
+    for root in roots:
+        print(f"{root.path} ({root.skill_count} skills)")
+
+
+def cmd_dogfood_index(args: argparse.Namespace) -> None:
+    catalog = catalog_from_args(args)
+    result = index_default_skill_roots(catalog, home=args.home)
+    payload = {
+        "catalog": str(catalog.path),
+        "indexed_count": result.indexed_count,
+        "roots": [
+            {"path": str(root.path), "skill_count": root.skill_count}
+            for root in result.roots
+        ],
+    }
+    if args.as_json:
+        print_json(payload)
+        return
+    if not result.roots:
+        print("No default skill roots found.")
+        return
+    print(f"Indexed {result.indexed_count} skills into {catalog.path}")
+    for root in result.roots:
+        print(f"- {root.path} ({root.skill_count} skills)")
 
 
 def cmd_bridge(args: argparse.Namespace) -> None:
@@ -189,4 +257,3 @@ def print_json(value: Any) -> None:
 
 if __name__ == "__main__":
     main()
-
