@@ -52,6 +52,31 @@ The default overlay path is `.skillroute/overlays/suggested.json` under the
 indexed root. Edit that JSON to mark `metadata.review_status` as `reviewed`,
 adjust tags/facets/relationships, then re-run `skillroute index --root <root>`.
 
+## Astra Data API Backend
+
+SkillRoute can sync the local catalog into an Astra DB Data API collection and
+query it with server-side vectorize search. Configure credentials with
+environment variables:
+
+```bash
+export ASTRA_DB_API_ENDPOINT="https://DATABASE_ID-REGION.apps.astra.datastax.com"
+export ASTRA_DB_APPLICATION_TOKEN="AstraCS:..."
+export SKILLROUTE_ASTRA_KEYSPACE="default_keyspace"
+export SKILLROUTE_ASTRA_COLLECTION="skillroute_skills"
+# Optional if your vectorize collection uses header authentication:
+export SKILLROUTE_ASTRA_EMBEDDING_API_KEY="..."
+```
+
+The default document shape includes `$vectorize`, so the target collection must
+be vectorize-enabled. You can pass collection options directly when creating it:
+
+```bash
+uv run skillroute backend astra create-collection --options-json '{"vector": {"service": {"provider": "YOUR_PROVIDER", "modelName": "YOUR_MODEL"}}}'
+uv run skillroute backend astra upsert
+uv run skillroute backend astra upsert --json --include-refs
+uv run skillroute backend astra search "build an MCP server"
+```
+
 ## MCP Server
 
 The MCP package is a thin TypeScript stdio wrapper around the Python bridge:

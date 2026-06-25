@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from skillroute.backends import AstraDataAPIBackend, AstraDataAPIError
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
@@ -104,6 +105,41 @@ def build_parser() -> argparse.ArgumentParser:
     metadata_review_parser.add_argument("--overlay", type=Path, default=None)
     metadata_review_parser.add_argument("--json", action="store_true", dest="as_json")
     metadata_review_parser.set_defaults(func=cmd_metadata_review)
+
+    backend_parser = subparsers.add_parser("backend", help="Work with external retrieval backends")
+    backend_subparsers = backend_parser.add_subparsers(dest="backend_command", required=True)
+    astra_parser = backend_subparsers.add_parser("astra", help="Use Astra DB Data API as a retrieval backend")
+    astra_subparsers = astra_parser.add_subparsers(dest="astra_command", required=True)
+    astra_create_parser = astra_subparsers.add_parser(
+        "create-collection",
+        help="Create the configured Astra collection",
+    )
+    astra_create_parser.add_argument(
+        "--options-json",
+        default=None,
+        help="Optional JSON object passed as createCollection.options.",
+    )
+    astra_create_parser.add_argument("--json", action="store_true", dest="as_json")
+    astra_create_parser.set_defaults(func=cmd_backend_astra_create_collection)
+    astra_upsert_parser = astra_subparsers.add_parser(
+        "upsert",
+        help="Upsert indexed catalog skills into the configured Astra collection",
+    )
+    astra_upsert_parser.add_argument(
+        "--include-refs",
+        action="store_true",
+        help="Include per-skill backend refs in JSON output.",
+    )
+    astra_upsert_parser.add_argument("--json", action="store_true", dest="as_json")
+    astra_upsert_parser.set_defaults(func=cmd_backend_astra_upsert)
+    astra_search_parser = astra_subparsers.add_parser(
+        "search",
+        help="Search the configured Astra collection with vectorize.",
+    )
+    astra_search_parser.add_argument("query")
+    astra_search_parser.add_argument("--limit", type=int, default=10)
+    astra_search_parser.add_argument("--json", action="store_true", dest="as_json")
+    astra_search_parser.set_defaults(func=cmd_backend_astra_search)
 
     bridge_parser = subparsers.add_parser("bridge", help="JSON stdin/stdout bridge for MCP wrappers")
     bridge_parser.add_argument("operation", choices=["route", "search", "inspect"])
@@ -266,6 +302,71 @@ def cmd_metadata_review(args: argparse.Namespace) -> None:
             print(f"- {issue}")
         raise SystemExit(1)
     print("No validation issues.")
+
+
+def cmd_backend_astra_create_collection(args: argparse.Namespace) -> None:
+    backend = AstraDataAPIBackend.from_env()
+    options = json.loads(args.options_json) if args.options_json else None
+    result = run_astra_command(lambda: backend.create_collection(options))
+    if args.as_json:
+        print_json(result)
+        return
+    print("Astra collection create command completed.")
+
+
+def cmd_backend_astra_upsert(args: argparse.Namespace) -> None:
+    catalog = catalog_from_args(args)
+    backend = AstraDataAPIBackend.from_env()
+    skills = catalog.list_skills()
+    refs = run_astra_command(lambda: backend.upsert_skills(skills))
+    for ref in refs:
+        catalog.save_backend_ref(ref["skill_id"], ref["backend"], ref["ref"], ref.get("status", "indexed"))
+    statuses = count_ref_statuses(refs)
+    payload = {
+        "backend": backend.name,
+        "collection": backend.collection,
+        "keyspace": backend.keyspace,
+        "skill_count": len(skills),
+        "ref_count": len(refs),
+        "status_counts": statuses,
+    }
+    if args.include_refs:
+        payload["refs"] = refs
+    if args.as_json:
+        print_json(payload)
+        return
+    print(f"Astra upsert processed {len(refs)} skills: {json.dumps(statuses, sort_keys=True)}")
+
+
+def cmd_backend_astra_search(args: argparse.Namespace) -> None:
+    catalog = catalog_from_args(args)
+    backend = AstraDataAPIBackend.from_env()
+    rows = run_astra_command(lambda: backend.search(args.query, catalog.list_skills(), limit=args.limit))
+    if args.as_json:
+        print_json(rows)
+        return
+    if not rows:
+        print("No Astra results.")
+        return
+    for row in rows:
+        skill = catalog.get_skill(row["skill_id"])
+        name = skill.name if skill else row["skill_id"]
+        print(f"{name} ({row['skill_id']}) score={row['score']}")
+
+
+def run_astra_command(operation):
+    try:
+        return operation()
+    except AstraDataAPIError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def count_ref_statuses(refs: list[dict[str, Any]]) -> dict[str, int]:
+    statuses: dict[str, int] = {}
+    for ref in refs:
+        status = ref.get("status", "unknown")
+        statuses[status] = statuses.get(status, 0) + 1
+    return statuses
 
 
 def cmd_bridge(args: argparse.Namespace) -> None:
