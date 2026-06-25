@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from skillroute.catalog import Catalog
+from skillroute.routing import Router
 
 
 def test_catalog_persists_skills_excerpts_and_relationships(indexed_catalog: Catalog) -> None:
@@ -68,3 +69,15 @@ def test_backend_refs_are_saved(indexed_catalog: Catalog) -> None:
 
     assert indexed_catalog.backend_refs(skill.id)[0]["status"] == "indexed"
 
+
+def test_route_traces_can_be_listed_and_loaded(indexed_catalog: Catalog) -> None:
+    Router(indexed_catalog).route("Build an MCP server with tools", limit=2)
+
+    traces = indexed_catalog.list_route_traces(limit=10)
+    assert traces[0]["request"]["request"] == "Build an MCP server with tools"
+    assert traces[0]["backend"] == "local-token"
+    assert traces[0]["top_candidate"]["name"] == "mcp-server-patterns"
+
+    trace = indexed_catalog.get_route_trace(traces[0]["id"])
+    assert trace is not None
+    assert trace["response"]["candidates"][0]["name"] == "mcp-server-patterns"

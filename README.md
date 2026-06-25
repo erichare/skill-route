@@ -83,6 +83,17 @@ uv run skillroute route "build an MCP server" --backend astra
 the hybrid candidate set. Set `SKILLROUTE_BACKEND=astra` to make Astra the
 default backend for route/search calls.
 
+## Route Observability
+
+Check the selected retrieval backend without exposing secrets, and inspect
+recorded route decisions from the local catalog:
+
+```bash
+uv run skillroute backend status --backend astra
+uv run skillroute traces list
+uv run skillroute traces show 1
+```
+
 ## MCP Server
 
 The MCP package is a thin TypeScript stdio wrapper around the Python bridge:

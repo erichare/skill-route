@@ -256,3 +256,54 @@ def test_cli_search_uses_selected_astra_backend(
     payload = json.loads(capsys.readouterr().out.split("\n", 1)[1])
     assert payload[0]["name"] == "astra-vector-backend"
     assert payload[0]["backend_score"] == 0.94
+
+
+def test_cli_backend_status_reports_astra_without_secrets(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    for name in (
+        "ASTRA_DB_API_ENDPOINT",
+        "ASTRA_DB_APPLICATION_TOKEN",
+        "SKILLROUTE_ASTRA_EMBEDDING_API_KEY",
+        "SKILLROUTE_BACKEND",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+
+    main(["--catalog", str(catalog_path), "backend", "status", "--backend", "astra", "--json"])
+
+    payload = json.loads(capsys.readouterr().out.split("\n", 1)[1])
+    assert payload["backend"] == "astra-data-api"
+    assert payload["status"] == "not_configured"
+    assert payload["configured"] is False
+    assert payload["skill_count"] == 3
+    assert payload["details"]["token_configured"] is False
+    assert "AstraCS" not in json.dumps(payload)
+
+
+def test_cli_traces_list_and_show(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    capsys,
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "route", "Build an MCP server with tools", "--json"])
+    capsys.readouterr()
+
+    main(["--catalog", str(catalog_path), "traces", "list", "--json"])
+
+    traces = json.loads(capsys.readouterr().out)
+    assert traces[0]["backend"] == "local-token"
+    assert traces[0]["top_candidate"]["name"] == "mcp-server-patterns"
+
+    main(["--catalog", str(catalog_path), "traces", "show", str(traces[0]["id"]), "--json"])
+
+    trace = json.loads(capsys.readouterr().out)
+    assert trace["request"]["request"] == "Build an MCP server with tools"
+    assert trace["response"]["candidates"][0]["name"] == "mcp-server-patterns"

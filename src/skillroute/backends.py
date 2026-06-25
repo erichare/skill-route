@@ -22,6 +22,9 @@ class RetrievalBackend(Protocol):
     def search(self, query: str, skills: list[SkillRecord], limit: int = 10) -> list[dict[str, Any]]:
         ...
 
+    def status(self, skills: list[SkillRecord] | None = None) -> dict[str, Any]:
+        ...
+
 
 class AstraDataAPIError(RuntimeError):
     def __init__(self, message: str, status_code: int | None = None, response: Any = None) -> None:
@@ -57,6 +60,15 @@ class LocalTokenBackend:
         rows.sort(key=lambda row: row["score"], reverse=True)
         return rows[:limit]
 
+    def status(self, skills: list[SkillRecord] | None = None) -> dict[str, Any]:
+        return {
+            "configured": True,
+            "status": "ready",
+            "search_available": True,
+            "write_available": True,
+            "mode": "local",
+        }
+
 
 @dataclass(slots=True)
 class AstraDataAPIBackend:
@@ -87,6 +99,28 @@ class AstraDataAPIBackend:
     @property
     def is_configured(self) -> bool:
         return bool(self.endpoint and self.token)
+
+    def status(self, skills: list[SkillRecord] | None = None) -> dict[str, Any]:
+        if not self.is_configured:
+            status = "not_configured"
+        elif not self.use_vectorize:
+            status = "vectorize_disabled"
+        else:
+            status = "ready"
+        return {
+            "configured": self.is_configured,
+            "status": status,
+            "search_available": self.is_configured and self.use_vectorize,
+            "write_available": self.is_configured,
+            "endpoint_configured": bool(self.endpoint),
+            "token_configured": bool(self.token),
+            "embedding_api_key_configured": bool(self.embedding_api_key),
+            "keyspace": self.keyspace,
+            "collection": self.collection,
+            "use_vectorize": self.use_vectorize,
+            "use_lexical": self.use_lexical,
+            "timeout_seconds": self.timeout_seconds,
+        }
 
     def build_documents(self, skills: list[SkillRecord], *, include_id: bool = True) -> list[dict[str, Any]]:
         documents = []
@@ -266,6 +300,15 @@ class LangChainBackendAdapter:
             metadata = getattr(document, "metadata", {}) or {}
             rows.append({"skill_id": metadata.get("skill_id"), "backend": self.name, "score": float(score)})
         return [row for row in rows if row["skill_id"]]
+
+    def status(self, skills: list[SkillRecord] | None = None) -> dict[str, Any]:
+        return {
+            "configured": self.vectorstore is not None,
+            "status": "ready" if self.vectorstore is not None else "not_configured",
+            "search_available": hasattr(self.vectorstore, "similarity_search_with_score"),
+            "write_available": hasattr(self.vectorstore, "add_documents"),
+            "mode": "langchain",
+        }
 
 
 def urlopen_transport(

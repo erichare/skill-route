@@ -113,8 +113,23 @@ def build_parser() -> argparse.ArgumentParser:
     metadata_review_parser.add_argument("--json", action="store_true", dest="as_json")
     metadata_review_parser.set_defaults(func=cmd_metadata_review)
 
+    traces_parser = subparsers.add_parser("traces", help="Inspect recorded route traces")
+    traces_subparsers = traces_parser.add_subparsers(dest="traces_command", required=True)
+    traces_list_parser = traces_subparsers.add_parser("list", help="List recent route traces")
+    traces_list_parser.add_argument("--limit", type=int, default=20)
+    traces_list_parser.add_argument("--json", action="store_true", dest="as_json")
+    traces_list_parser.set_defaults(func=cmd_traces_list)
+    traces_show_parser = traces_subparsers.add_parser("show", help="Show one route trace")
+    traces_show_parser.add_argument("trace_id", type=int)
+    traces_show_parser.add_argument("--json", action="store_true", dest="as_json")
+    traces_show_parser.set_defaults(func=cmd_traces_show)
+
     backend_parser = subparsers.add_parser("backend", help="Work with external retrieval backends")
     backend_subparsers = backend_parser.add_subparsers(dest="backend_command", required=True)
+    backend_status_parser = backend_subparsers.add_parser("status", help="Show selected retrieval backend status")
+    add_backend_argument(backend_status_parser)
+    backend_status_parser.add_argument("--json", action="store_true", dest="as_json")
+    backend_status_parser.set_defaults(func=cmd_backend_status)
     astra_parser = backend_subparsers.add_parser("astra", help="Use Astra DB Data API as a retrieval backend")
     astra_subparsers = astra_parser.add_subparsers(dest="astra_command", required=True)
     astra_create_parser = astra_subparsers.add_parser(
@@ -337,6 +352,46 @@ def cmd_metadata_review(args: argparse.Namespace) -> None:
     print("No validation issues.")
 
 
+def cmd_traces_list(args: argparse.Namespace) -> None:
+    catalog = catalog_from_args(args)
+    traces = catalog.list_route_traces(limit=args.limit)
+    if args.as_json:
+        print_json(traces)
+        return
+    if not traces:
+        print("No route traces recorded.")
+        return
+    for trace in traces:
+        top = trace["top_candidate"]
+        top_text = f"{top['name']} confidence={top['confidence']}" if top else "no candidates"
+        request_text = trace["request"].get("request", "")
+        print(f"{trace['id']} {trace['created_at']} backend={trace.get('backend') or 'unknown'}")
+        print(f"  request: {request_text}")
+        print(f"  top: {top_text}")
+        print(f"  clarification_needed: {trace['clarification_needed']}")
+
+
+def cmd_traces_show(args: argparse.Namespace) -> None:
+    catalog = catalog_from_args(args)
+    trace = catalog.get_route_trace(args.trace_id)
+    if trace is None:
+        raise SystemExit(f"Route trace not found: {args.trace_id}")
+    if args.as_json:
+        print_json(trace)
+        return
+    print_trace(trace)
+
+
+def cmd_backend_status(args: argparse.Namespace) -> None:
+    catalog = catalog_from_args(args)
+    backend = backend_from_args(args)
+    payload = backend_status_payload(catalog, backend)
+    if args.as_json:
+        print_json(payload)
+        return
+    print_backend_status(payload)
+
+
 def cmd_backend_astra_create_collection(args: argparse.Namespace) -> None:
     backend = AstraDataAPIBackend.from_env()
     options = json.loads(args.options_json) if args.options_json else None
@@ -400,6 +455,54 @@ def count_ref_statuses(refs: list[dict[str, Any]]) -> dict[str, int]:
         status = ref.get("status", "unknown")
         statuses[status] = statuses.get(status, 0) + 1
     return statuses
+
+
+def backend_status_payload(catalog: Catalog, backend: RetrievalBackend) -> dict[str, Any]:
+    skills = catalog.list_skills()
+    status = backend.status(skills)
+    ref_summary = catalog.backend_ref_summary(backend.name)
+    return {
+        "backend": backend.name,
+        "configured": bool(status.get("configured")),
+        "status": status.get("status", "unknown"),
+        "search_available": bool(status.get("search_available")),
+        "write_available": bool(status.get("write_available")),
+        "catalog": str(catalog.path),
+        "skill_count": len(skills),
+        "ref_count": ref_summary["ref_count"],
+        "ref_status_counts": ref_summary["status_counts"],
+        "details": {
+            key: value
+            for key, value in status.items()
+            if key not in {"configured", "status", "search_available", "write_available"}
+        },
+    }
+
+
+def print_backend_status(payload: dict[str, Any]) -> None:
+    print(f"{payload['backend']} status={payload['status']}")
+    print(f"configured: {payload['configured']}")
+    print(f"search_available: {payload['search_available']}")
+    print(f"write_available: {payload['write_available']}")
+    print(f"catalog: {payload['catalog']}")
+    print(f"skills: {payload['skill_count']}")
+    print(f"backend refs: {payload['ref_count']} {json.dumps(payload['ref_status_counts'], sort_keys=True)}")
+    if payload["details"]:
+        print(f"details: {json.dumps(payload['details'], sort_keys=True)}")
+
+
+def print_trace(trace: dict[str, Any]) -> None:
+    request = trace["request"]
+    response = trace["response"]
+    print(f"Trace {trace['id']} {trace['created_at']}")
+    print(f"backend: {request.get('backend', 'unknown')}")
+    print(f"request: {request.get('request', '')}")
+    print(f"clarification_needed: {response.get('clarification_needed')}")
+    for index, candidate in enumerate(response.get("candidates", []), start=1):
+        score_breakdown = candidate.get("score_breakdown", {})
+        print(f"{index}. {candidate.get('name')} confidence={candidate.get('confidence')}")
+        print(f"   skill_id: {candidate.get('skill_id')}")
+        print(f"   scores: {json.dumps(score_breakdown, sort_keys=True)}")
 
 
 def cmd_bridge(args: argparse.Namespace) -> None:

@@ -246,6 +246,33 @@ class Catalog:
                 (json.dumps(request, sort_keys=True), json.dumps(to_jsonable(response), sort_keys=True)),
             )
 
+    def list_route_traces(self, limit: int = 20) -> list[dict[str, Any]]:
+        self.initialize()
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, request_json, response_json, created_at
+                FROM route_traces
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return [route_trace_summary(row) for row in rows]
+
+    def get_route_trace(self, trace_id: int) -> dict[str, Any] | None:
+        self.initialize()
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, request_json, response_json, created_at
+                FROM route_traces
+                WHERE id = ?
+                """,
+                (trace_id,),
+            ).fetchone()
+            return route_trace_detail(row) if row else None
+
     def save_backend_ref(self, skill_id: str, backend: str, ref: str, status: str) -> None:
         self.initialize()
         with self.connect() as connection:
@@ -269,6 +296,22 @@ class Catalog:
                 (skill_id,),
             ).fetchall()
             return [dict(row) for row in rows]
+
+    def backend_ref_summary(self, backend: str) -> dict[str, Any]:
+        self.initialize()
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM backend_index_refs
+                WHERE backend = ?
+                GROUP BY status
+                ORDER BY status
+                """,
+                (backend,),
+            ).fetchall()
+            status_counts = {row["status"]: row["count"] for row in rows}
+            return {"ref_count": sum(status_counts.values()), "status_counts": status_counts}
 
     def _record_from_row(self, connection: sqlite3.Connection, row: sqlite3.Row) -> SkillRecord:
         excerpts = [
@@ -310,3 +353,38 @@ class Catalog:
             relationships=relationships,
             references=references,
         )
+
+
+def route_trace_detail(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "created_at": row["created_at"],
+        "request": json.loads(row["request_json"]),
+        "response": json.loads(row["response_json"]),
+    }
+
+
+def route_trace_summary(row: sqlite3.Row) -> dict[str, Any]:
+    trace = route_trace_detail(row)
+    response = trace["response"]
+    candidates = response.get("candidates", [])
+    top_candidate = candidates[0] if candidates else None
+    return {
+        "id": trace["id"],
+        "created_at": trace["created_at"],
+        "request": trace["request"],
+        "backend": trace["request"].get("backend"),
+        "candidate_count": len(candidates),
+        "top_candidate": summarize_trace_candidate(top_candidate),
+        "clarification_needed": bool(response.get("clarification_needed")),
+    }
+
+
+def summarize_trace_candidate(candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not candidate:
+        return None
+    return {
+        "skill_id": candidate.get("skill_id"),
+        "name": candidate.get("name"),
+        "confidence": candidate.get("confidence"),
+    }
