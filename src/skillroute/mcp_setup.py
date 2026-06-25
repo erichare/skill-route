@@ -10,7 +10,15 @@ from typing import Any
 from skillroute.catalog import default_catalog_path
 
 
-MCP_CLIENT_CHOICES = ("ibm-bob", "codex", "claude-code", "claude-desktop")
+MCP_CLIENT_CHOICES = (
+    "ibm-bob",
+    "codex",
+    "claude-code",
+    "claude-desktop",
+    "vscode",
+    "windsurf",
+    "cursor",
+)
 CLAUDE_SCOPE_CHOICES = ("local", "project", "user")
 
 
@@ -65,8 +73,10 @@ def build_mcp_setup(
         payload.update(
             {
                 "install_command": None,
+                "install_command_parts": None,
                 "config_path": "~/.bob/mcp.json or .bob/mcp.json",
                 "config_format": "json",
+                "setup_method": "json_merge",
                 "config": {
                     "mcpServers": {
                         server_name: {
@@ -79,53 +89,72 @@ def build_mcp_setup(
             }
         )
     elif client == "codex":
+        command_parts = codex_command_parts(server_name, catalog_path, selected_backend, entrypoint)
         payload.update(
             {
-                "install_command": shell_command(
-                    [
-                        "codex",
-                        "mcp",
-                        "add",
-                        server_name,
-                        "--env",
-                        f"SKILLROUTE_CATALOG_PATH={catalog_path}",
-                        "--env",
-                        f"SKILLROUTE_BACKEND={selected_backend}",
-                        "--",
-                        "node",
-                        str(entrypoint),
-                    ]
-                ),
+                "install_command": shell_command(command_parts),
+                "install_command_parts": command_parts,
                 "config_path": "~/.codex/config.toml",
                 "config_format": "toml",
+                "setup_method": "command",
                 "config": codex_toml(server_name, entrypoint, resolved_repo_root, env),
             }
         )
     elif client == "claude-code":
+        command_parts = claude_code_command_parts(
+            server_name,
+            catalog_path,
+            selected_backend,
+            entrypoint,
+            claude_scope,
+        )
         payload.update(
             {
                 "scope": claude_scope,
-                "install_command": shell_command(
-                    [
-                        "claude",
-                        "mcp",
-                        "add",
-                        "--transport",
-                        "stdio",
-                        "--scope",
-                        claude_scope,
-                        "--env",
-                        f"SKILLROUTE_CATALOG_PATH={catalog_path}",
-                        "--env",
-                        f"SKILLROUTE_BACKEND={selected_backend}",
-                        server_name,
-                        "--",
-                        "node",
-                        str(entrypoint),
-                    ]
-                ),
+                "install_command": shell_command(command_parts),
+                "install_command_parts": command_parts,
                 "config_path": claude_code_config_path(claude_scope),
                 "config_format": "json",
+                "setup_method": "command",
+                "config": {"mcpServers": {server_name: stdio_server_config}},
+            }
+        )
+    elif client == "claude-desktop":
+        payload.update(
+            {
+                "install_command": None,
+                "install_command_parts": None,
+                "config_path": (
+                    "~/Library/Application Support/Claude/claude_desktop_config.json "
+                    "or %APPDATA%\\Claude\\claude_desktop_config.json"
+                ),
+                "config_format": "json",
+                "setup_method": "json_merge",
+                "config": {"mcpServers": {server_name: stdio_server_config}},
+            }
+        )
+    elif client == "vscode":
+        server_config = {"name": server_name, **stdio_server_config}
+        command_parts = ["code", "--add-mcp", json.dumps(server_config, sort_keys=True)]
+        payload.update(
+            {
+                "install_command": shell_command(command_parts),
+                "install_command_parts": command_parts,
+                "config_path": "VS Code user profile mcp.json",
+                "config_format": "json",
+                "setup_method": "command",
+                "config": {"servers": {server_name: stdio_server_config}},
+                "server_config": server_config,
+            }
+        )
+    elif client == "windsurf":
+        payload.update(
+            {
+                "install_command": None,
+                "install_command_parts": None,
+                "config_path": "~/.codeium/windsurf/mcp_config.json",
+                "config_format": "json",
+                "setup_method": "json_merge",
                 "config": {"mcpServers": {server_name: stdio_server_config}},
             }
         )
@@ -133,12 +162,15 @@ def build_mcp_setup(
         payload.update(
             {
                 "install_command": None,
-                "config_path": (
-                    "~/Library/Application Support/Claude/claude_desktop_config.json "
-                    "or %APPDATA%\\Claude\\claude_desktop_config.json"
-                ),
+                "install_command_parts": None,
+                "config_path": "Cursor MCP settings",
                 "config_format": "json",
+                "setup_method": "print_only",
                 "config": {"mcpServers": {server_name: stdio_server_config}},
+                "notes": [
+                    *payload["notes"],
+                    "Cursor setup is snippet-only until a stable official write target is confirmed.",
+                ],
             }
         )
 
@@ -151,6 +183,53 @@ def default_repo_root() -> Path:
 
 def shell_command(parts: list[str]) -> str:
     return shlex.join(parts)
+
+
+def codex_command_parts(
+    server_name: str,
+    catalog_path: Path,
+    selected_backend: str,
+    entrypoint: Path,
+) -> list[str]:
+    return [
+        "codex",
+        "mcp",
+        "add",
+        server_name,
+        "--env",
+        f"SKILLROUTE_CATALOG_PATH={catalog_path}",
+        "--env",
+        f"SKILLROUTE_BACKEND={selected_backend}",
+        "--",
+        "node",
+        str(entrypoint),
+    ]
+
+
+def claude_code_command_parts(
+    server_name: str,
+    catalog_path: Path,
+    selected_backend: str,
+    entrypoint: Path,
+    claude_scope: str,
+) -> list[str]:
+    return [
+        "claude",
+        "mcp",
+        "add",
+        "--transport",
+        "stdio",
+        "--scope",
+        claude_scope,
+        "--env",
+        f"SKILLROUTE_CATALOG_PATH={catalog_path}",
+        "--env",
+        f"SKILLROUTE_BACKEND={selected_backend}",
+        server_name,
+        "--",
+        "node",
+        str(entrypoint),
+    ]
 
 
 def codex_toml(server_name: str, entrypoint: Path, repo_root: Path, env: dict[str, str]) -> str:
@@ -215,5 +294,8 @@ def client_display_name(client: str) -> str:
         "codex": "Codex",
         "claude-code": "Claude Code",
         "claude-desktop": "Claude Desktop",
+        "vscode": "VS Code",
+        "cursor": "Cursor",
+        "windsurf": "Windsurf",
     }
     return names.get(client, client)

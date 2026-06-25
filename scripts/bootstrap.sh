@@ -43,4 +43,7 @@ Generate agent setup:
   uv run skillroute mcp config --client codex
   uv run skillroute mcp config --client claude-code
   uv run skillroute mcp config --client claude-desktop
+  uv run skillroute mcp config --client vscode
+  uv run skillroute mcp config --client windsurf
+  uv run skillroute mcp config --client cursor
 EOF

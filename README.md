@@ -16,15 +16,15 @@ golden-route evals, and inspectable routing traces.
 
 ## Quick Start
 
-One-line installer for IBM Bob:
+One-line SkillRoute installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
 ```
 
 It confirms each step, installs SkillRoute into `~/.skillroute/skill-route` by
-default, bootstraps the MCP server, and can write Bob's `~/.bob/mcp.json` config
-with a backup.
+default, bootstraps the MCP server, detects supported agent clients, and offers
+to set up each detected client with backups for edited JSON config files.
 
 Already in a checkout:
 
@@ -78,6 +78,10 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
 ```bash
 uv run skillroute mcp config --client ibm-bob
 uv run skillroute mcp config --client codex
+uv run skillroute mcp config --client claude-code
+uv run skillroute mcp config --client vscode
+uv run skillroute mcp config --client windsurf
+uv run skillroute mcp config --client cursor
 uv run skillroute search "Astra vector backend"
 uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
 uv run skillroute backend status --backend astra

@@ -173,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command", required=True)
     mcp_config_parser = mcp_subparsers.add_parser(
         "config",
-        help="Print SkillRoute MCP setup for IBM Bob, Codex, Claude Code, or Claude Desktop",
+        help="Print SkillRoute MCP setup for supported agent clients",
     )
     mcp_config_parser.add_argument("--client", choices=MCP_CLIENT_CHOICES, required=True)
     mcp_config_parser.add_argument("--repo-root", type=Path, default=None)

@@ -5,7 +5,7 @@ requests without a hosted service.
 
 ## One Command First
 
-For a fresh IBM Bob setup:
+For a fresh SkillRoute install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
@@ -13,7 +13,9 @@ curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/i
 
 The installer confirms each step, installs SkillRoute into
 `~/.skillroute/skill-route` by default, builds the MCP server, indexes starter
-skills, and offers to write Bob's MCP config with a timestamped backup.
+skills, detects supported agent clients, and offers setup for each detected
+client. JSON config edits preserve unrelated servers and create timestamped
+backups.
 
 For unattended use:
 
@@ -27,8 +29,16 @@ Useful installer options:
 curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
   | SKILLROUTE_INSTALL_DIR=/opt/skillroute bash
 
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --ref main --no-bob-write
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+  | bash -s -- --clients codex,claude-code,vscode --yes
+
+curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+  | SKILLROUTE_CLIENT_SETUP=0 bash
 ```
+
+Use `--no-client-setup` when you want detection output without config changes.
+Use `--clients auto`, `--clients all`, or a comma-separated list such as
+`--clients ibm-bob,codex,windsurf`.
 
 Already in a checkout:
 
@@ -42,7 +52,11 @@ The installer and bootstrap script:
 - installs Node dependencies for the MCP server
 - builds `mcp/build/index.js`
 - indexes the example skills into `.skillroute/catalog.db`
-- prints setup commands for IBM Bob, Codex, Claude Code, and Claude Desktop
+- prints setup commands for supported agent clients
+
+The installer can configure IBM Bob, Codex, Claude Code, Claude Desktop, VS Code,
+and Windsurf. Cursor is detected and shown as a snippet only until a stable
+official write target is confirmed.
 
 ## IBM Bob
 
@@ -133,6 +147,42 @@ Windows: %APPDATA%\Claude\claude_desktop_config.json
 Restart Claude Desktop after editing the file. See the official
 [local MCP server guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers).
 
+## VS Code
+
+Generate a reviewed `code --add-mcp` command and profile snippet:
+
+```bash
+uv run skillroute mcp config --client vscode
+```
+
+The installer uses the VS Code CLI when `code` or `code-insiders` is available.
+Manual config uses a top-level `servers` object. See the official
+[VS Code MCP docs](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+
+## Windsurf
+
+Generate a Windsurf-ready `mcpServers` block:
+
+```bash
+uv run skillroute mcp config --client windsurf
+```
+
+The installer writes `~/.codeium/windsurf/mcp_config.json` when Windsurf is
+selected, preserving unrelated servers and creating a backup if the file already
+exists. See the official
+[Windsurf MCP docs](https://docs.devin.ai/desktop/cascade/mcp).
+
+## Cursor
+
+Generate a Cursor-compatible snippet:
+
+```bash
+uv run skillroute mcp config --client cursor
+```
+
+Cursor is detect-and-print only in V1. SkillRoute does not write Cursor config
+until the official config path and schema are stable enough to automate safely.
+
 ## Codex Plugin Status
 
 V1 uses direct MCP setup because the server currently points at a local source
@@ -156,6 +206,8 @@ uv run skillroute mcp config --client ibm-bob --backend astra
 uv run skillroute mcp config --client codex --backend astra
 uv run skillroute mcp config --client claude-code --catalog /path/to/catalog.db
 uv run skillroute mcp config --client claude-desktop --server-name skillroute-dev
+uv run skillroute mcp config --client vscode --server-name skillroute-dev
+uv run skillroute mcp config --client windsurf --catalog /path/to/catalog.db
 ```
 
 Generated config includes only local paths and SkillRoute backend selection. Keep

@@ -47,8 +47,8 @@ Goal: make the hybrid score easier to tune.
 Goal: make local install and MCP registration smooth.
 
 - Done: add a one-command bootstrap for local development.
-- Done: add a prompted curl installer with IBM Bob setup.
-- Done: generate reviewed MCP setup for IBM Bob, Codex, Claude Code, and Claude Desktop.
+- Done: add a prompted SkillRoute curl installer with detected-client setup.
+- Done: generate reviewed MCP setup for IBM Bob, Codex, Claude Code, Claude Desktop, VS Code, Windsurf, and Cursor.
 - Done: document current setup paths and plugin packaging direction.
 - Next: add package metadata polish.
 - Next: add a Codex plugin package with `.codex-plugin/plugin.json` and `.mcp.json`.
