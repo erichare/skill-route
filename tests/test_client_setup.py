@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
@@ -9,9 +10,11 @@ import pytest
 from skillroute.client_setup import (
     ClientDetection,
     ClientEnvironment,
+    NO_TTY_SETUP_MESSAGE,
     apply_client_setup,
     detect_clients,
     merge_json_config,
+    run_setup_command,
     select_clients,
 )
 
@@ -168,3 +171,41 @@ def test_apply_missing_command_client_skips_without_running(
 
     assert result.status == "skipped"
     assert result.message == "codex command not found"
+
+
+def test_setup_command_skips_prompt_mode_without_tty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    detection = ClientDetection(
+        "codex",
+        "Codex",
+        True,
+        "found /bin/codex",
+        "command",
+        command="/bin/codex",
+    )
+
+    monkeypatch.setattr("skillroute.client_setup.detect_clients", lambda _env: [detection])
+    monkeypatch.setattr("skillroute.client_setup.can_prompt", lambda: False)
+
+    def fail_setup(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("client setup should not run without a promptable terminal")
+
+    monkeypatch.setattr("skillroute.client_setup.apply_client_setup", fail_setup)
+
+    run_setup_command(
+        Namespace(
+            repo_root=tmp_path / "repo",
+            catalog=None,
+            backend=None,
+            clients="auto",
+            mode="prompt",
+            yes=False,
+        )
+    )
+
+    output = capsys.readouterr().out
+    assert "Detected agent clients:" in output
+    assert NO_TTY_SETUP_MESSAGE in output

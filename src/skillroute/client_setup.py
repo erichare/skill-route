@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass
@@ -23,6 +24,11 @@ CLIENT_ORDER = (
     "cursor",
 )
 CLIENT_SETUP_CHOICES = ("prompt", "0", "1")
+NO_TTY_SETUP_MESSAGE = (
+    "No terminal is available for client setup prompts; skipping automatic client configuration. "
+    "Re-run with --yes or SKILLROUTE_CLIENT_SETUP=1 to configure detected clients, "
+    "or use SKILLROUTE_CLIENT_SETUP=0 to skip this step."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +297,16 @@ def confirm(prompt: str) -> bool:
     return reply in {"y", "yes"}
 
 
+def can_prompt() -> bool:
+    if os.isatty(0):
+        return True
+    try:
+        with open("/dev/tty", "r+", encoding="utf-8"):
+            return True
+    except OSError:
+        return False
+
+
 def print_detection_summary(detections: list[ClientDetection]) -> None:
     print("Detected agent clients:")
     for detection in detections:
@@ -305,6 +321,9 @@ def run_setup_command(args: argparse.Namespace) -> None:
     selected = select_clients(args.clients, detections)
     if not selected:
         print("No clients selected for setup.")
+        return
+    if args.mode == "prompt" and not args.yes and not can_prompt():
+        print(NO_TTY_SETUP_MESSAGE)
         return
     repo_root = args.repo_root.expanduser().resolve()
     catalog = args.catalog.expanduser().resolve() if args.catalog else default_catalog_path(repo_root)
