@@ -12,9 +12,9 @@ curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/i
 ```
 
 The installer confirms each step before it clones or updates SkillRoute,
-installs dependencies, builds the MCP server, indexes starter skills, detects
-supported agent clients, and offers setup for each detected client. It installs
-to `~/.skillroute/skill-route` by default.
+installs dependencies, builds the MCP server and Skill Atlas web UI, indexes
+starter skills, detects supported agent clients, and offers setup for each
+detected client. It installs to `~/.skillroute/skill-route` by default.
 
 For unattended local/dev use:
 
@@ -29,7 +29,8 @@ Already in a checkout:
 ```
 
 That installs the Python environment, installs and builds the MCP server, indexes
-the example skills, and prints copy-paste setup commands for supported clients.
+the example skills, builds the Skill Atlas UI, and prints copy-paste setup
+commands for supported clients.
 
 Manual setup is also supported:
 
@@ -56,6 +57,15 @@ uv run skillroute route "Build an MCP server that exposes routing tools"
 
 The response includes ranked skills, confidence, reasons, evidence snippets,
 score components, suggested order, and clarification questions when needed.
+
+## Explore The Skill Atlas
+
+```bash
+uv run skillroute ui
+```
+
+Skill Atlas opens a local read-only graph for browsing domains, relationships,
+evidence, backend refs, and route previews.
 
 ## Search And Inspect
 
@@ -84,6 +94,7 @@ Dogfood discovery checks:
 ## Next
 
 - Connect SkillRoute to an agent client with [agent setup](agent-setup.md).
+- Explore the local graph with [Skill Atlas](skill-atlas.md).
 - Configure [Astra retrieval](astra-backend.md) when you want remote vectorize
   search.
 - Use [metadata overlays](metadata-overlays.md) to review inferred facets and

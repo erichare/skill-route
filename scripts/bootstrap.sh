@@ -24,6 +24,12 @@ npm --prefix mcp install
 echo "==> Building MCP server"
 npm --prefix mcp run build
 
+echo "==> Installing Skill Atlas web dependencies"
+npm --prefix web install
+
+echo "==> Building Skill Atlas web UI"
+npm --prefix web run build
+
 echo "==> Indexing example skills"
 uv run skillroute index --root examples/skills
 
@@ -37,6 +43,7 @@ SkillRoute is ready.
 Try:
   uv run skillroute route "Build an MCP server that exposes routing tools"
   uv run skillroute inspect mcp-server-patterns
+  uv run skillroute ui
 
 Generate agent setup:
   uv run skillroute mcp config --client ibm-bob

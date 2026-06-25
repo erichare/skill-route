@@ -31,6 +31,7 @@ Already in a checkout:
 ```bash
 ./scripts/bootstrap.sh
 uv run skillroute route "Build an MCP server that exposes routing tools"
+uv run skillroute ui
 ```
 
 Manual setup is still just a few commands:
@@ -61,6 +62,8 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
   `skillroute.inspect_skill`.
 - CLI tools for indexing, routing, search, metadata review, backend status,
   trace inspection, and golden-route evals.
+- Skill Atlas web UI for exploring the local skill graph, facets, relationships,
+  route previews, and source evidence.
 
 ## Docs
 
@@ -69,6 +72,7 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
 - [Astra Data API Backend](docs/astra-backend.md)
 - [Metadata Overlays](docs/metadata-overlays.md)
 - [Route Observability](docs/route-observability.md)
+- [Skill Atlas UI](docs/skill-atlas.md)
 - [MCP Server](docs/mcp-server.md)
 - [Golden Route Evals](docs/evals.md)
 - [Roadmap](docs/roadmap.md)
@@ -86,11 +90,13 @@ uv run skillroute search "Astra vector backend"
 uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
 uv run skillroute backend status --backend astra
 uv run skillroute traces list
+uv run skillroute ui
 ```
 
 ## Current Shape
 
 - Python core: parsing, catalog persistence, routing, adapters, evals, and CLI.
+- Skill Atlas UI: local FastAPI server plus React Flow/Vite frontend.
 - TypeScript MCP: local stdio transport around the Python bridge.
 - Retrieval adapters: local token backend by default, with Astra DB Data API and
   LangChain-compatible adapter contracts.
@@ -100,5 +106,6 @@ uv run skillroute traces list
 ```bash
 uv run --extra dev pytest
 uv run --extra dev ruff check .
+npm --prefix web run build && npm --prefix web run typecheck && npm --prefix web run test
 cd mcp && npm run build && npm run typecheck && npm run smoke
 ```

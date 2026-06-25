@@ -22,7 +22,14 @@ class Router:
         self.backend = backend or LocalTokenBackend()
         self.reranker = reranker or default_reranker()
 
-    def route(self, request: str, repo: Path | str | None = None, limit: int = 5) -> RouteResponse:
+    def route(
+        self,
+        request: str,
+        repo: Path | str | None = None,
+        limit: int = 5,
+        *,
+        record_trace: bool = True,
+    ) -> RouteResponse:
         repo_path = Path(repo).expanduser() if repo else None
         repo_context = collect_repo_context(repo_path)
         skills = self.catalog.list_skills()
@@ -41,15 +48,16 @@ class Router:
             if clarification_needed
             else [],
         )
-        self.catalog.record_route_trace(
-            {
-                "request": request,
-                "repo": str(repo_path) if repo_path else None,
-                "limit": limit,
-                "backend": self.backend.name,
-            },
-            response,
-        )
+        if record_trace:
+            self.catalog.record_route_trace(
+                {
+                    "request": request,
+                    "repo": str(repo_path) if repo_path else None,
+                    "limit": limit,
+                    "backend": self.backend.name,
+                },
+                response,
+            )
         return response
 
     def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:

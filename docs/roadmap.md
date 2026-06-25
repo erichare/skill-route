@@ -34,6 +34,15 @@ Goal: expose debug surfaces to agents, not only humans at the CLI.
 - Add `skillroute.list_traces`.
 - Add `skillroute.inspect_trace`.
 
+## Slice 4.5: Skill Atlas UI
+
+Goal: make the skill catalog explorable as a local visual graph.
+
+- Done: add `skillroute ui` with a local FastAPI server.
+- Done: add a React Flow/Vite Skill Atlas clustered by facets/domains.
+- Done: add read-only route previews that do not record traces.
+- Next: add metadata overlay editing and review workflows.
+
 ## Slice 5: Router Scoring Review
 
 Goal: make the hybrid score easier to tune.
