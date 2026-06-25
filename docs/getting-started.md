@@ -12,7 +12,8 @@ Fast path:
 ```
 
 That installs the Python environment, installs and builds the MCP server, indexes
-the example skills, and prints copy-paste setup commands for Codex and Claude.
+the example skills, and prints copy-paste setup commands for IBM Bob, Codex, and
+Claude.
 
 Manual setup is also supported:
 
@@ -66,7 +67,7 @@ Dogfood discovery checks:
 
 ## Next
 
-- Connect SkillRoute to Codex or Claude with [agent setup](agent-setup.md).
+- Connect SkillRoute to IBM Bob, Codex, or Claude with [agent setup](agent-setup.md).
 - Configure [Astra retrieval](astra-backend.md) when you want remote vectorize
   search.
 - Use [metadata overlays](metadata-overlays.md) to review inferred facets and

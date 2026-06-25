@@ -10,7 +10,7 @@ from typing import Any
 from skillroute.catalog import default_catalog_path
 
 
-MCP_CLIENT_CHOICES = ("codex", "claude-code", "claude-desktop")
+MCP_CLIENT_CHOICES = ("ibm-bob", "codex", "claude-code", "claude-desktop")
 CLAUDE_SCOPE_CHOICES = ("local", "project", "user")
 
 
@@ -38,7 +38,7 @@ def build_mcp_setup(
         "SKILLROUTE_CATALOG_PATH": str(catalog_path),
         "SKILLROUTE_BACKEND": selected_backend,
     }
-    server_config = {
+    stdio_server_config = {
         "command": "node",
         "args": [str(entrypoint)],
         "env": env,
@@ -57,11 +57,28 @@ def build_mcp_setup(
         "mcp_entrypoint": str(entrypoint),
         "catalog": str(catalog_path),
         "backend": selected_backend,
-        "server_config": server_config,
+        "server_config": stdio_server_config,
         "notes": notes,
     }
 
-    if client == "codex":
+    if client == "ibm-bob":
+        payload.update(
+            {
+                "install_command": None,
+                "config_path": "~/.bob/mcp.json or .bob/mcp.json",
+                "config_format": "json",
+                "config": {
+                    "mcpServers": {
+                        server_name: {
+                            **stdio_server_config,
+                            "cwd": str(resolved_repo_root),
+                            "disabled": False,
+                        }
+                    }
+                },
+            }
+        )
+    elif client == "codex":
         payload.update(
             {
                 "install_command": shell_command(
@@ -109,7 +126,7 @@ def build_mcp_setup(
                 ),
                 "config_path": claude_code_config_path(claude_scope),
                 "config_format": "json",
-                "config": {"mcpServers": {server_name: server_config}},
+                "config": {"mcpServers": {server_name: stdio_server_config}},
             }
         )
     else:
@@ -121,7 +138,7 @@ def build_mcp_setup(
                     "or %APPDATA%\\Claude\\claude_desktop_config.json"
                 ),
                 "config_format": "json",
-                "config": {"mcpServers": {server_name: server_config}},
+                "config": {"mcpServers": {server_name: stdio_server_config}},
             }
         )
 
@@ -171,7 +188,7 @@ def toml_string(value: str) -> str:
 
 def render_mcp_setup(payload: dict[str, Any]) -> str:
     lines = [
-        f"SkillRoute MCP setup for {payload['client']}",
+        f"SkillRoute MCP setup for {client_display_name(payload['client'])}",
         f"server: {payload['server_name']}",
         f"catalog: {payload['catalog']}",
         f"backend: {payload['backend']}",
@@ -190,3 +207,13 @@ def render_mcp_setup(payload: dict[str, Any]) -> str:
         lines.extend(["", "Notes:"])
         lines.extend(f"- {note}" for note in payload["notes"])
     return "\n".join(lines)
+
+
+def client_display_name(client: str) -> str:
+    names = {
+        "ibm-bob": "IBM Bob",
+        "codex": "Codex",
+        "claude-code": "Claude Code",
+        "claude-desktop": "Claude Desktop",
+    }
+    return names.get(client, client)

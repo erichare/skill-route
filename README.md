@@ -64,6 +64,7 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
 ## Core Commands
 
 ```bash
+uv run skillroute mcp config --client ibm-bob
 uv run skillroute mcp config --client codex
 uv run skillroute search "Astra vector backend"
 uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json

@@ -39,6 +39,7 @@ Try:
   uv run skillroute inspect mcp-server-patterns
 
 Generate agent setup:
+  uv run skillroute mcp config --client ibm-bob
   uv run skillroute mcp config --client codex
   uv run skillroute mcp config --client claude-code
   uv run skillroute mcp config --client claude-desktop

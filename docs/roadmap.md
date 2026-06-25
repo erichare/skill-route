@@ -47,7 +47,7 @@ Goal: make the hybrid score easier to tune.
 Goal: make local install and MCP registration smooth.
 
 - Done: add a one-command bootstrap for local development.
-- Done: generate reviewed MCP setup for Codex, Claude Code, and Claude Desktop.
+- Done: generate reviewed MCP setup for IBM Bob, Codex, Claude Code, and Claude Desktop.
 - Done: document current setup paths and plugin packaging direction.
 - Next: add package metadata polish.
 - Next: add a Codex plugin package with `.codex-plugin/plugin.json` and `.mcp.json`.
