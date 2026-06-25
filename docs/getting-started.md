@@ -1,0 +1,62 @@
+# Getting Started
+
+SkillRoute is a local CLI and MCP server for routing agent requests to the right
+skills.
+
+## Install
+
+Use the repo directly during V1 development:
+
+```bash
+uv sync --extra dev
+```
+
+## Index Example Skills
+
+```bash
+uv run skillroute index --root examples/skills
+```
+
+This creates `.skillroute/catalog.db` in the current directory unless you pass
+`--catalog` or set `SKILLROUTE_CATALOG_PATH`.
+
+## Route A Request
+
+```bash
+uv run skillroute route "Build an MCP server that exposes routing tools"
+```
+
+The response includes ranked skills, confidence, reasons, evidence snippets,
+score components, suggested order, and clarification questions when needed.
+
+## Search And Inspect
+
+```bash
+uv run skillroute search "Astra vector backend"
+uv run skillroute inspect astra-vector-backend
+```
+
+Search is useful for catalog exploration. Inspect shows reviewed metadata,
+relationships, excerpts, source paths, and backend refs.
+
+## Dogfood Local Skills
+
+```bash
+uv run skillroute dogfood roots
+uv run skillroute dogfood index
+uv run skillroute route "Review a GitHub PR with exact file and line evidence"
+```
+
+Dogfood discovery checks:
+
+- `~/.codex/skills`
+- `~/.agents/skills`
+- `~/.codex/plugins/cache`
+
+## Next
+
+- Configure [Astra retrieval](astra-backend.md) when you want remote vectorize
+  search.
+- Use [metadata overlays](metadata-overlays.md) to review inferred facets and
+  relationships.
+- Run [golden-route evals](evals.md) before changing router scoring.
