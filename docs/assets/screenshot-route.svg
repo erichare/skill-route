@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="430" viewBox="0 0 960 430" role="img" aria-labelledby="title desc">
+  <title id="title">SkillRoute route output screenshot</title>
+  <desc id="desc">Terminal-style screenshot showing ranked skill routing output with confidence, reasons, and evidence.</desc>
+  <rect width="960" height="430" rx="18" fill="#0f172a"/>
+  <rect x="0" y="0" width="960" height="44" rx="18" fill="#111827"/>
+  <circle cx="28" cy="22" r="6" fill="#ef4444"/>
+  <circle cx="50" cy="22" r="6" fill="#f59e0b"/>
+  <circle cx="72" cy="22" r="6" fill="#22c55e"/>
+  <text x="104" y="27" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">skillroute route</text>
+  <text x="28" y="82" fill="#93c5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">$ uv run skillroute route "Build an MCP server"</text>
+  <text x="28" y="124" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" font-weight="700">Ranked skills</text>
+  <text x="28" y="160" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">1. mcp-server-patterns</text>
+  <text x="300" y="160" fill="#86efac" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">confidence=0.49</text>
+  <text x="28" y="190" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">Build MCP servers with Node and TypeScript using tools, resources, Zod schemas, and stdio.</text>
+  <text x="48" y="224" fill="#bae6fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">reason: Matched request terms against skill name, description, tags, or excerpts.</text>
+  <text x="48" y="252" fill="#bae6fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">reason: local-token retrieval returned this skill as a candidate.</text>
+  <text x="48" y="280" fill="#fde68a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">evidence[description]: Build MCP servers with Node and TypeScript using tools...</text>
+  <rect x="28" y="314" width="904" height="70" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="48" y="344" fill="#c4b5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">score_breakdown</text>
+  <text x="48" y="370" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">lexical=2.23  semantic=0.43  repo=0.00  graph=0.04  total=1.23</text>
+</svg>

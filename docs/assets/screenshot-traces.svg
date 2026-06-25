@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="430" viewBox="0 0 960 430" role="img" aria-labelledby="title desc">
+  <title id="title">SkillRoute route trace screenshot</title>
+  <desc id="desc">Terminal-style screenshot showing backend status and route trace inspection commands.</desc>
+  <rect width="960" height="430" rx="18" fill="#101820"/>
+  <rect x="0" y="0" width="960" height="44" rx="18" fill="#182433"/>
+  <circle cx="28" cy="22" r="6" fill="#ef4444"/>
+  <circle cx="50" cy="22" r="6" fill="#f59e0b"/>
+  <circle cx="72" cy="22" r="6" fill="#22c55e"/>
+  <text x="104" y="27" fill="#d1d5db" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">skillroute observability</text>
+  <text x="28" y="82" fill="#93c5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">$ uv run skillroute backend status --backend astra</text>
+  <rect x="28" y="104" width="422" height="126" rx="10" fill="#17212f" stroke="#334155"/>
+  <text x="48" y="136" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">astra-data-api status=not_configured</text>
+  <text x="48" y="166" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">configured: false</text>
+  <text x="48" y="194" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">search_available: false</text>
+  <text x="48" y="218" fill="#a7f3d0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">token_configured=false endpoint_configured=false</text>
+  <text x="500" y="82" fill="#93c5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">$ uv run skillroute traces list</text>
+  <rect x="500" y="104" width="432" height="126" rx="10" fill="#17212f" stroke="#334155"/>
+  <text x="520" y="136" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">1 2026-06-25 19:26:19 backend=local-token</text>
+  <text x="520" y="166" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">request: Build an MCP server</text>
+  <text x="520" y="194" fill="#fde68a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">top: mcp-server-patterns confidence=0.49</text>
+  <text x="520" y="218" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">clarification_needed: false</text>
+  <text x="28" y="274" fill="#93c5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">$ uv run skillroute traces show 1</text>
+  <rect x="28" y="296" width="904" height="88" rx="10" fill="#17212f" stroke="#334155"/>
+  <text x="48" y="326" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">Trace 1 | backend=local-token | request="Build an MCP server"</text>
+  <text x="48" y="354" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">1. mcp-server-patterns confidence=0.4916</text>
+  <text x="48" y="378" fill="#c4b5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">scores: lexical=2.2333 semantic=0.4333 repo=0.0 graph=0.04 total=1.229</text>
+</svg>
