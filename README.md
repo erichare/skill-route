@@ -39,6 +39,19 @@ Use the example dogfood cases as a template for real routing regressions:
 uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/dogfood_routes.json
 ```
 
+## Metadata Review
+
+Generate a reviewable overlay without editing source `SKILL.md` files:
+
+```bash
+uv run skillroute metadata suggest --root examples/skills
+uv run skillroute metadata review --root examples/skills
+```
+
+The default overlay path is `.skillroute/overlays/suggested.json` under the
+indexed root. Edit that JSON to mark `metadata.review_status` as `reviewed`,
+adjust tags/facets/relationships, then re-run `skillroute index --root <root>`.
+
 ## MCP Server
 
 The MCP package is a thin TypeScript stdio wrapper around the Python bridge:

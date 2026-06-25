@@ -11,6 +11,7 @@ from typing import Any
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
+from skillroute.metadata import default_overlay_path, review_metadata_overlay, write_metadata_overlay
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
 
@@ -83,6 +84,26 @@ def build_parser() -> argparse.ArgumentParser:
     dogfood_index_parser.add_argument("--home", type=Path, default=None)
     dogfood_index_parser.add_argument("--json", action="store_true", dest="as_json")
     dogfood_index_parser.set_defaults(func=cmd_dogfood_index)
+
+    metadata_parser = subparsers.add_parser("metadata", help="Create and review skill metadata overlays")
+    metadata_subparsers = metadata_parser.add_subparsers(dest="metadata_command", required=True)
+    metadata_suggest_parser = metadata_subparsers.add_parser(
+        "suggest",
+        help="Write reviewable metadata suggestions as an overlay JSON file",
+    )
+    metadata_suggest_parser.add_argument("--root", type=Path, required=True)
+    metadata_suggest_parser.add_argument("--output", type=Path, default=None)
+    metadata_suggest_parser.add_argument("--force", action="store_true")
+    metadata_suggest_parser.add_argument("--json", action="store_true", dest="as_json")
+    metadata_suggest_parser.set_defaults(func=cmd_metadata_suggest)
+    metadata_review_parser = metadata_subparsers.add_parser(
+        "review",
+        help="Validate and summarize a metadata overlay JSON file",
+    )
+    metadata_review_parser.add_argument("--root", type=Path, default=None)
+    metadata_review_parser.add_argument("--overlay", type=Path, default=None)
+    metadata_review_parser.add_argument("--json", action="store_true", dest="as_json")
+    metadata_review_parser.set_defaults(func=cmd_metadata_review)
 
     bridge_parser = subparsers.add_parser("bridge", help="JSON stdin/stdout bridge for MCP wrappers")
     bridge_parser.add_argument("operation", choices=["route", "search", "inspect"])
@@ -210,6 +231,41 @@ def cmd_dogfood_index(args: argparse.Namespace) -> None:
     print(f"Indexed {result.indexed_count} skills into {catalog.path}")
     for root in result.roots:
         print(f"- {root.path} ({root.skill_count} skills)")
+
+
+def cmd_metadata_suggest(args: argparse.Namespace) -> None:
+    try:
+        result = write_metadata_overlay(args.root, output=args.output, force=args.force)
+    except FileExistsError as exc:
+        raise SystemExit(str(exc)) from exc
+    payload = {"output_path": str(result.output_path), "skill_count": result.skill_count}
+    if args.as_json:
+        print_json(payload)
+        return
+    print(f"Wrote metadata suggestions for {result.skill_count} skills to {result.output_path}")
+
+
+def cmd_metadata_review(args: argparse.Namespace) -> None:
+    if args.overlay is None and args.root is None:
+        raise SystemExit("Provide --overlay or --root.")
+    overlay_path = args.overlay or default_overlay_path(args.root)
+    result = review_metadata_overlay(overlay_path)
+    payload = to_jsonable(result)
+    payload["overlay_path"] = str(result.overlay_path)
+    if args.as_json:
+        print_json(payload)
+        return
+    print(f"Overlay: {result.overlay_path}")
+    print(f"Skills: {result.skill_count}")
+    print(f"Relationships: {result.relationship_count}")
+    if result.status_counts:
+        print(f"Review status: {json.dumps(result.status_counts, sort_keys=True)}")
+    if result.issues:
+        print("Issues:")
+        for issue in result.issues:
+            print(f"- {issue}")
+        raise SystemExit(1)
+    print("No validation issues.")
 
 
 def cmd_bridge(args: argparse.Namespace) -> None:

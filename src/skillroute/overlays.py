@@ -18,17 +18,27 @@ def load_overlays(root: Path) -> dict[str, dict[str, Any]]:
     return overlays
 
 
-def overlay_for_skill(overlays: dict[str, dict[str, Any]], skill_file: Path, name: str | None = None) -> dict[str, Any]:
+def overlay_for_skill(
+    overlays: dict[str, dict[str, Any]],
+    skill_file: Path,
+    name: str | None = None,
+    root: Path | None = None,
+) -> dict[str, Any]:
     candidates = [
         str(skill_file.resolve()),
         str(skill_file),
+        str(Path(skill_file.parent.name) / skill_file.name),
         str(skill_file.parent.resolve()),
         skill_file.parent.name,
     ]
+    if root:
+        try:
+            candidates.insert(0, str(skill_file.resolve().relative_to(root.resolve())))
+        except ValueError:
+            pass
     if name:
         candidates.append(name)
     for candidate in candidates:
         if candidate in overlays:
             return overlays[candidate]
     return {}
-

@@ -124,7 +124,7 @@ class Catalog:
             raw_text = skill_file.read_text(encoding="utf-8")
             metadata, _ = parse_frontmatter(raw_text)
             name = str(metadata.get("name") or skill_file.parent.name)
-            overlay = overlay_for_skill(overlays, skill_file, name)
+            overlay = overlay_for_skill(overlays, skill_file, name, root=root_path)
             skills.append(parse_skill_bundle(skill_file, root=root_path, overlay=overlay))
         self.replace_root(root_path, skills)
         for backend_ref in LocalTokenBackend().upsert_skills(skills):
