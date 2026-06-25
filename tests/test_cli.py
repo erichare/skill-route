@@ -258,6 +258,102 @@ def test_cli_search_uses_selected_astra_backend(
     assert payload[0]["backend_score"] == 0.94
 
 
+def test_cli_mcp_config_codex_outputs_install_command_and_toml(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    catalog_path = tmp_path / "catalog.db"
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "codex",
+            "--repo-root",
+            str(repo_root),
+            "--catalog",
+            str(catalog_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    entrypoint = repo_root / "mcp" / "build" / "index.js"
+    assert payload["client"] == "codex"
+    assert payload["config_path"] == "~/.codex/config.toml"
+    assert payload["install_command"].startswith("codex mcp add skillroute")
+    assert f"SKILLROUTE_CATALOG_PATH={catalog_path}" in payload["install_command"]
+    assert str(entrypoint) in payload["install_command"]
+    assert "[mcp_servers.skillroute]" in payload["config"]
+    assert f'args = ["{entrypoint}"]' in payload["config"]
+    assert f'SKILLROUTE_CATALOG_PATH = "{catalog_path}"' in payload["config"]
+    assert any("MCP entrypoint not found yet" in note for note in payload["notes"])
+
+
+def test_cli_mcp_config_claude_code_outputs_scoped_command_and_json(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "claude-code",
+            "--repo-root",
+            str(repo_root),
+            "--scope",
+            "project",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    server = payload["config"]["mcpServers"]["skillroute"]
+    assert payload["scope"] == "project"
+    assert payload["config_path"] == ".mcp.json"
+    assert "claude mcp add --transport stdio --scope project" in payload["install_command"]
+    assert server["command"] == "node"
+    assert server["args"] == [str(repo_root / "mcp" / "build" / "index.js")]
+    assert server["env"]["SKILLROUTE_BACKEND"] == "local"
+
+
+def test_cli_mcp_config_claude_desktop_prints_config_snippet(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    catalog_path = tmp_path / "catalog.db"
+
+    main(
+        [
+            "mcp",
+            "config",
+            "--client",
+            "claude-desktop",
+            "--repo-root",
+            str(repo_root),
+            "--catalog",
+            str(catalog_path),
+            "--backend",
+            "astra",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "SkillRoute MCP setup for claude-desktop" in output
+    assert "claude_desktop_config.json" in output
+    assert '"SKILLROUTE_BACKEND": "astra"' in output
+    assert str(repo_root / "mcp" / "build" / "index.js") in output
+
+
 def test_cli_backend_status_reports_astra_without_secrets(
     tmp_path: Path,
     fixture_skills_root: Path,

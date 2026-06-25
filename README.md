@@ -17,6 +17,13 @@ golden-route evals, and inspectable routing traces.
 ## Quick Start
 
 ```bash
+./scripts/bootstrap.sh
+uv run skillroute route "Build an MCP server that exposes routing tools"
+```
+
+Manual setup is still just a few commands:
+
+```bash
 uv run skillroute index --root examples/skills
 uv run skillroute route "Build an MCP server that exposes routing tools"
 uv run skillroute inspect mcp-server-patterns
@@ -46,6 +53,7 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
 ## Docs
 
 - [Getting Started](docs/getting-started.md)
+- [Agent Setup](docs/agent-setup.md)
 - [Astra Data API Backend](docs/astra-backend.md)
 - [Metadata Overlays](docs/metadata-overlays.md)
 - [Route Observability](docs/route-observability.md)
@@ -56,6 +64,7 @@ The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
 ## Core Commands
 
 ```bash
+uv run skillroute mcp config --client codex
 uv run skillroute search "Astra vector backend"
 uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
 uv run skillroute backend status --backend astra
