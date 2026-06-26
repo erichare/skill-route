@@ -109,6 +109,17 @@ button {
   background: rgba(15, 32, 48, 0.8);
 }
 
+.rail-button:disabled {
+  color: #536274;
+  cursor: default;
+  opacity: 0.62;
+}
+
+.rail-button:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
 .rail-spacer {
   flex: 1;
 }
@@ -241,6 +252,11 @@ button {
   color: #8191a4;
   font-size: 11px;
   cursor: pointer;
+}
+
+.segmented button:disabled {
+  color: #5e6c7d;
+  cursor: default;
 }
 
 .segmented button:last-child {
@@ -412,9 +428,15 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  min-width: 0;
+  overflow: hidden;
   padding: 0 20px 0 26px;
   border-bottom: 1px solid var(--line);
   background: rgba(2, 8, 15, 0.64);
+}
+
+.top-bar > div:first-child {
+  min-width: 0;
 }
 
 .top-title {
@@ -424,7 +446,7 @@ button {
 }
 
 .top-meta {
-  max-width: 560px;
+  max-width: 100%;
   margin-top: 4px;
   overflow: hidden;
   color: #7f91a6;
@@ -435,10 +457,13 @@ button {
 
 .top-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 9px;
+  min-width: 0;
 }
 
 .top-actions button,
+.layout-chip,
 .preview-button,
 .path-toggle {
   display: inline-flex;
@@ -452,9 +477,24 @@ button {
   cursor: pointer;
 }
 
+.layout-chip {
+  padding: 0 11px;
+  font-size: 12px;
+  cursor: default;
+}
+
 .top-actions button {
   padding: 0 11px;
   font-size: 12px;
+}
+
+.top-actions button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.top-actions button.loading svg {
+  animation: spin 800ms linear infinite;
 }
 
 .graph-frame {
@@ -602,6 +642,34 @@ button {
   background: rgba(2, 11, 19, 0.76);
   font-size: 11px;
   transform: translateX(-50%);
+}
+
+.empty-graph-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  gap: 5px;
+  width: min(280px, calc(100% - 32px));
+  padding: 14px 16px;
+  color: #b8c7d8;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: var(--radius);
+  background: rgba(2, 11, 19, 0.82);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.empty-graph-state strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.empty-graph-state span {
+  color: #8fa2b7;
+  font-size: 12px;
 }
 
 .mini-map {
@@ -1013,6 +1081,12 @@ button {
   color: #93a4b8;
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 1180px) {
   body {
     overflow: auto;
@@ -1061,11 +1135,31 @@ button {
   }
 
   .top-bar {
-    padding: 0 12px;
+    align-content: center;
+    align-items: start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    min-height: 84px;
+    padding: 10px 12px;
+  }
+
+  .map-surface {
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .top-meta {
-    max-width: 300px;
+    max-width: 100%;
+  }
+
+  .top-actions {
+    justify-content: start;
+    width: 100%;
+  }
+
+  .top-actions button,
+  .layout-chip {
+    min-height: 30px;
   }
 
   .legend {

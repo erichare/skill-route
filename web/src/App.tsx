@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   Background,
   Controls,
@@ -8,7 +8,8 @@ import {
   ReactFlow,
   type Node,
   type NodeProps,
-  type OnMoveEnd
+  type OnMoveEnd,
+  type ReactFlowInstance
 } from "@xyflow/react";
 import {
   Boxes,
@@ -39,6 +40,9 @@ const nodeTypes = {
   domain: DomainNode
 };
 
+type InspectorTab = "overview" | "skills" | "excerpts" | "stats";
+type NavSection = "map" | "atlas" | "routes" | "catalog";
+
 export function App() {
   const [atlas, setAtlas] = useState<AtlasPayload | null>(null);
   const [filters, setFilters] = useState<AtlasFilters | null>(null);
@@ -49,7 +53,14 @@ export function App() {
   const [routeHighlightEnabled, setRouteHighlightEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [refreshingAtlas, setRefreshingAtlas] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [activeNav, setActiveNav] = useState<NavSection>("map");
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("overview");
+  const leftPanelRef = useRef<HTMLElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const routeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +74,7 @@ export function App() {
         const storedSelected = localStorage.getItem(storageKey(payload.catalog.fingerprint));
         setAtlas(payload);
         setFilters(nextFilters);
-        setSelectedId(storedSelected || `domain:${payload.domains[0]?.id ?? "uncategorized"}`);
+        setSelectedId(resolveSelectedId(payload, storedSelected));
         setError(null);
       })
       .catch((caught: Error) => setError(caught.message))
@@ -130,6 +141,43 @@ export function App() {
     }
   }
 
+  async function refreshAtlas() {
+    setRefreshingAtlas(true);
+    try {
+      const payload = await fetchAtlas();
+      setAtlas(payload);
+      setFilters(defaultFilters(payload));
+      setSelectedId((current) => resolveSelectedId(payload, current));
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Atlas refresh failed");
+    } finally {
+      setRefreshingAtlas(false);
+    }
+  }
+
+  function relayoutGraph() {
+    void flowInstance?.fitView({ padding: 0.18, duration: 260 });
+  }
+
+  function selectNavSection(section: NavSection) {
+    setActiveNav(section);
+    if (section === "map") {
+      relayoutGraph();
+      return;
+    }
+    if (section === "atlas") {
+      searchInputRef.current?.focus();
+      return;
+    }
+    if (section === "routes") {
+      routeInputRef.current?.scrollIntoView({ block: "nearest" });
+      routeInputRef.current?.focus();
+      return;
+    }
+    leftPanelRef.current?.scrollTo({ top: leftPanelRef.current.scrollHeight, behavior: "smooth" });
+  }
+
   if (loading) {
     return <StatusScreen title="Loading Skill Atlas" detail="Reading the local catalog and building the map." />;
   }
@@ -144,10 +192,21 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <NavRail />
-      <LeftPanel atlas={atlas} filters={filters} onFiltersChange={setFilters} />
+      <NavRail activeSection={activeNav} onSelect={selectNavSection} />
+      <LeftPanel
+        atlas={atlas}
+        filters={filters}
+        onFiltersChange={setFilters}
+        panelRef={leftPanelRef}
+        searchInputRef={searchInputRef}
+      />
       <main className="map-surface">
-        <TopBar atlas={atlas} />
+        <TopBar
+          atlas={atlas}
+          onRefresh={() => void refreshAtlas()}
+          onRelayout={relayoutGraph}
+          refreshing={refreshingAtlas}
+        />
         <div className="graph-frame">
           <ReactFlow
             nodes={graph.nodes}
@@ -157,6 +216,7 @@ export function App() {
             fitViewOptions={{ padding: 0.18 }}
             minZoom={0.35}
             maxZoom={1.7}
+            onInit={setFlowInstance}
             onNodeClick={(_, node) => setSelectedId(node.id)}
             onPaneClick={() => setSelectedId(`domain:${atlas.domains[0]?.id ?? "uncategorized"}`)}
             onMoveEnd={onMoveEnd}
@@ -173,6 +233,7 @@ export function App() {
             <Controls className="flow-controls" showInteractive={false} />
           </ReactFlow>
           <RelationshipLegend atlas={atlas} />
+          {graph.visibleSkillIds.size === 0 ? <EmptyGraphState /> : null}
           <div className="canvas-help">Drag to pan • Scroll to zoom • Click a node to inspect</div>
         </div>
       </main>
@@ -181,6 +242,8 @@ export function App() {
         selectedDomain={selectedDomain}
         selectedNode={selectedNode}
         skillDetail={skillDetail}
+        activeTab={inspectorTab}
+        onTabChange={setInspectorTab}
       />
       <RoutePreviewStrip
         routeInput={routeInput}
@@ -190,23 +253,30 @@ export function App() {
         routeHighlightEnabled={routeHighlightEnabled}
         setRouteHighlightEnabled={setRouteHighlightEnabled}
         runRoutePreview={runRoutePreview}
+        inputRef={routeInputRef}
       />
     </div>
   );
 }
 
-function NavRail() {
+function NavRail({
+  activeSection,
+  onSelect
+}: {
+  activeSection: NavSection;
+  onSelect: (section: NavSection) => void;
+}) {
   return (
     <aside className="nav-rail">
       <div className="brand-mark">
         <Network size={25} />
       </div>
-      <RailButton icon={<Map size={19} />} label="Map" active />
-      <RailButton icon={<Layers3 size={19} />} label="Atlas" />
-      <RailButton icon={<Route size={19} />} label="Routes" />
-      <RailButton icon={<Database size={19} />} label="Catalog" />
+      <RailButton icon={<Map size={19} />} label="Map" active={activeSection === "map"} onClick={() => onSelect("map")} />
+      <RailButton icon={<Layers3 size={19} />} label="Atlas" active={activeSection === "atlas"} onClick={() => onSelect("atlas")} />
+      <RailButton icon={<Route size={19} />} label="Routes" active={activeSection === "routes"} onClick={() => onSelect("routes")} />
+      <RailButton icon={<Database size={19} />} label="Catalog" active={activeSection === "catalog"} onClick={() => onSelect("catalog")} />
       <div className="rail-spacer" />
-      <RailButton icon={<Settings2 size={19} />} label="Settings" />
+      <RailButton icon={<Settings2 size={19} />} label="Settings" disabled />
       <div className="local-first">
         <span />
         Local-first
@@ -215,9 +285,27 @@ function NavRail() {
   );
 }
 
-function RailButton({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) {
+function RailButton({
+  icon,
+  label,
+  active = false,
+  disabled = false,
+  onClick
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <button className={`rail-button ${active ? "active" : ""}`} title={label} type="button">
+    <button
+      className={`rail-button ${active ? "active" : ""}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled ? `${label} unavailable in this view` : label}
+      type="button"
+    >
       {icon}
       <span>{label}</span>
     </button>
@@ -227,15 +315,19 @@ function RailButton({ icon, label, active = false }: { icon: React.ReactNode; la
 function LeftPanel({
   atlas,
   filters,
-  onFiltersChange
+  onFiltersChange,
+  panelRef,
+  searchInputRef
 }: {
   atlas: AtlasPayload;
   filters: AtlasFilters;
   onFiltersChange: (filters: AtlasFilters) => void;
+  panelRef: RefObject<HTMLElement | null>;
+  searchInputRef: RefObject<HTMLInputElement | null>;
 }) {
   const allDomainsSelected = filters.domains.length === atlas.domains.length;
   return (
-    <aside className="left-panel">
+    <aside className="left-panel" ref={panelRef}>
       <div className="panel-section title-section">
         <h1>SkillRoute</h1>
       </div>
@@ -244,6 +336,7 @@ function LeftPanel({
         <label className="search-box">
           <Search size={15} />
           <input
+            ref={searchInputRef}
             value={filters.search}
             onChange={(event) => onFiltersChange({ ...filters, search: event.target.value })}
             placeholder="Search skills, facets, tags..."
@@ -255,8 +348,8 @@ function LeftPanel({
         <div className="section-label">Graph Mode</div>
         <div className="segmented">
           <button className="active" type="button">Facet Nebula</button>
-          <button type="button">Skill Graph</button>
-          <button type="button">Matrix</button>
+          <button disabled title="Skill Graph is not available in this view" type="button">Skill Graph</button>
+          <button disabled title="Matrix is not available in this view" type="button">Matrix</button>
         </div>
       </div>
       <div className="panel-section grow">
@@ -399,7 +492,17 @@ function StatRow({ label, value, color }: { label: string; value: number | strin
   );
 }
 
-function TopBar({ atlas }: { atlas: AtlasPayload }) {
+function TopBar({
+  atlas,
+  onRefresh,
+  onRelayout,
+  refreshing
+}: {
+  atlas: AtlasPayload;
+  onRefresh: () => void;
+  onRelayout: () => void;
+  refreshing: boolean;
+}) {
   return (
     <header className="top-bar">
       <div>
@@ -409,9 +512,17 @@ function TopBar({ atlas }: { atlas: AtlasPayload }) {
         </div>
       </div>
       <div className="top-actions">
-        <button type="button">Layout: Radial</button>
-        <button aria-label="Relayout" type="button"><Waypoints size={17} /></button>
-        <button aria-label="Refresh" type="button"><RefreshCcw size={17} /></button>
+        <span className="layout-chip">Layout: Radial</span>
+        <button aria-label="Relayout" onClick={onRelayout} type="button"><Waypoints size={17} /></button>
+        <button
+          aria-label="Refresh"
+          className={refreshing ? "loading" : ""}
+          disabled={refreshing}
+          onClick={onRefresh}
+          type="button"
+        >
+          <RefreshCcw size={17} />
+        </button>
       </div>
     </header>
   );
@@ -436,25 +547,44 @@ function Inspector({
   atlas,
   selectedDomain,
   selectedNode,
-  skillDetail
+  skillDetail,
+  activeTab,
+  onTabChange
 }: {
   atlas: AtlasPayload;
   selectedDomain: DomainSummary | null;
   selectedNode: AtlasNodeRecord | null;
   skillDetail: SkillDetail | null;
+  activeTab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
 }) {
   return (
     <aside className="inspector">
       {selectedNode ? (
-        <SkillInspector node={selectedNode} detail={skillDetail} />
+        <SkillInspector node={selectedNode} detail={skillDetail} activeTab={activeTab} onTabChange={onTabChange} />
       ) : (
-        <DomainInspector atlas={atlas} domain={selectedDomain ?? atlas.domains[0]} />
+        <DomainInspector
+          atlas={atlas}
+          domain={selectedDomain ?? atlas.domains[0]}
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+        />
       )}
     </aside>
   );
 }
 
-function DomainInspector({ atlas, domain }: { atlas: AtlasPayload; domain: DomainSummary }) {
+function DomainInspector({
+  atlas,
+  domain,
+  activeTab,
+  onTabChange
+}: {
+  atlas: AtlasPayload;
+  domain: DomainSummary;
+  activeTab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
+}) {
   const skills = atlas.nodes.filter((node) => node.domain === domain.id);
   const topSkills = [...skills]
     .sort(
@@ -475,39 +605,60 @@ function DomainInspector({ atlas, domain }: { atlas: AtlasPayload; domain: Domai
         </div>
         <span className="count-pill">{domain.count} skills</span>
       </div>
-      <InspectorTabs />
-      <section className="inspector-block">
-        <div className="block-label">Relationship Density</div>
-        <div className="density-number">{density}<span>avg. connections / skill</span></div>
-        <div className="density-meter"><span style={{ width: `${Math.min(Number(density) * 38, 100)}%` }} /></div>
-      </section>
-      <section className="inspector-block">
-        <div className="block-label">Top Skills</div>
-        <div className="top-skills">
-          {topSkills.map((skill, index) => (
-            <div key={skill.id} className="top-skill-row">
-              <span>{index + 1}</span>
-              <strong>{skill.name}</strong>
-              <div className="mini-dots">
-                {skill.tags.slice(0, 4).map((tag) => <i key={tag} style={{ background: skill.color }} />)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="inspector-block">
-        <div className="block-label">Tags / Facets</div>
-        <TagCloud tags={[...new Set(skills.flatMap((skill) => skill.tags))].slice(0, 10)} />
-      </section>
+      <InspectorTabs activeTab={activeTab} onTabChange={onTabChange} />
+      {activeTab === "overview" ? (
+        <>
+          <section className="inspector-block">
+            <div className="block-label">Relationship Density</div>
+            <div className="density-number">{density}<span>avg. connections / skill</span></div>
+            <div className="density-meter"><span style={{ width: `${Math.min(Number(density) * 38, 100)}%` }} /></div>
+          </section>
+          <section className="inspector-block">
+            <div className="block-label">Top Skills</div>
+            <TopSkillsList skills={topSkills} />
+          </section>
+        </>
+      ) : null}
+      {activeTab === "skills" ? (
+        <section className="inspector-block">
+          <div className="block-label">Skills</div>
+          <TopSkillsList skills={skills.slice(0, 12)} />
+        </section>
+      ) : null}
+      {activeTab === "excerpts" ? (
+        <section className="inspector-block">
+          <div className="block-label">Tags / Facets</div>
+          <TagCloud tags={[...new Set(skills.flatMap((skill) => skill.tags))].slice(0, 18)} />
+        </section>
+      ) : null}
+      {activeTab === "stats" ? (
+        <section className="inspector-block relationship-grid">
+          <StatRow label="Skills" value={skills.length} />
+          <StatRow label="Relationships" value={atlas.edges.filter((edge) => skills.some((skill) => skill.id === edge.source)).length} />
+          <StatRow label="Catalog Total" value={atlas.catalog.skillCount} />
+        </section>
+      ) : null}
     </>
   );
 }
 
-function SkillInspector({ node, detail }: { node: AtlasNodeRecord; detail: SkillDetail | null }) {
+function SkillInspector({
+  node,
+  detail,
+  activeTab,
+  onTabChange
+}: {
+  node: AtlasNodeRecord;
+  detail: SkillDetail | null;
+  activeTab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
+}) {
   const excerpts = detail?.excerpts ?? [];
   const references = detail?.references ?? [];
   const backendRefs = detail?.backend_refs ?? node.backendRefs;
   const unresolvedRelationships = detail?.unresolved_relationships ?? [];
+  const incomingRelationships = detail?.incoming_relationships ?? [];
+  const outgoingRelationships = detail?.outgoing_relationships ?? [];
   return (
     <>
       <div className="inspector-header">
@@ -517,68 +668,139 @@ function SkillInspector({ node, detail }: { node: AtlasNodeRecord; detail: Skill
           <h2>{node.name}</h2>
         </div>
       </div>
-      <InspectorTabs />
-      <section className="inspector-block">
-        <p className="skill-description">{node.description}</p>
-        <TagCloud tags={node.tags} />
-      </section>
-      <section className="inspector-block relationship-grid">
-        <StatRow label="Incoming" value={detail?.relationship_summary.incoming ?? node.relationshipSummary.incoming} />
-        <StatRow label="Outgoing" value={detail?.relationship_summary.outgoing ?? node.relationshipSummary.outgoing} />
-        <StatRow label="Unresolved" value={node.relationshipSummary.unresolved} color="#f59e0b" />
-      </section>
-      {unresolvedRelationships.length ? (
-        <section className="inspector-block warning-list">
-          <div className="block-label">Unresolved Relationships</div>
-          {unresolvedRelationships.map((relationship) => (
-            <div key={`${relationship.type}:${relationship.target}`} className="warning-row">
-              <span>{relationship.type.replace("_", " ")}</span>
-              <strong>{relationship.target}</strong>
-            </div>
-          ))}
+      <InspectorTabs activeTab={activeTab} onTabChange={onTabChange} />
+      {activeTab === "overview" ? (
+        <>
+          <section className="inspector-block">
+            <p className="skill-description">{node.description}</p>
+            <TagCloud tags={node.tags} />
+          </section>
+          <section className="inspector-block relationship-grid">
+            <StatRow label="Incoming" value={detail?.relationship_summary.incoming ?? node.relationshipSummary.incoming} />
+            <StatRow label="Outgoing" value={detail?.relationship_summary.outgoing ?? node.relationshipSummary.outgoing} />
+            <StatRow label="Unresolved" value={node.relationshipSummary.unresolved} color="#f59e0b" />
+          </section>
+          {unresolvedRelationships.length ? (
+            <section className="inspector-block warning-list">
+              <div className="block-label">Unresolved Relationships</div>
+              {unresolvedRelationships.map((relationship) => (
+                <div key={`${relationship.type}:${relationship.target}`} className="warning-row">
+                  <span>{relationship.type.replace("_", " ")}</span>
+                  <strong>{relationship.target}</strong>
+                </div>
+              ))}
+            </section>
+          ) : null}
+        </>
+      ) : null}
+      {activeTab === "skills" ? (
+        <section className="inspector-block">
+          <div className="block-label">Related Skills</div>
+          <RelationshipList incoming={incomingRelationships} outgoing={outgoingRelationships} />
         </section>
       ) : null}
-      <section className="inspector-block">
-        <div className="block-label">Excerpt</div>
-        <p className="excerpt">{excerpts[0]?.text ?? "No excerpt available for this skill."}</p>
-      </section>
-      <section className="inspector-block">
-        <div className="block-label">Source References</div>
-        <div className="reference-list">
-          {references.slice(0, 4).map((reference) => (
-            <div key={reference.path} className="reference-row">
-              <span>{reference.kind}</span>
-              <strong>{basename(reference.path)}</strong>
+      {activeTab === "excerpts" ? (
+        <>
+          <section className="inspector-block">
+            <div className="block-label">Excerpt</div>
+            <p className="excerpt">{excerpts[0]?.text ?? "No excerpt available for this skill."}</p>
+          </section>
+          <section className="inspector-block">
+            <div className="block-label">Source References</div>
+            <div className="reference-list">
+              {references.slice(0, 4).map((reference) => (
+                <div key={reference.path} className="reference-row">
+                  <span>{reference.kind}</span>
+                  <strong>{basename(reference.path)}</strong>
+                </div>
+              ))}
+              {!references.length ? <div className="muted-row">No source references loaded.</div> : null}
             </div>
-          ))}
-          {!references.length ? <div className="muted-row">No source references loaded.</div> : null}
-        </div>
-      </section>
-      <section className="inspector-block">
-        <div className="block-label">Backend Index Status</div>
-        {backendRefs.length ? (
-          backendRefs.map((ref) => (
-            <div key={`${ref.backend}:${ref.ref}`} className="backend-row">
-              <span className="status-dot" />
-              <strong>{ref.status}</strong>
-              <span>{ref.backend}</span>
-            </div>
-          ))
-        ) : (
-          <div className="muted-row">No backend refs recorded.</div>
-        )}
-      </section>
+          </section>
+        </>
+      ) : null}
+      {activeTab === "stats" ? (
+        <section className="inspector-block">
+          <div className="block-label">Backend Index Status</div>
+          {backendRefs.length ? (
+            backendRefs.map((ref) => (
+              <div key={`${ref.backend}:${ref.ref}`} className="backend-row">
+                <span className="status-dot" />
+                <strong>{ref.status}</strong>
+                <span>{ref.backend}</span>
+              </div>
+            ))
+          ) : (
+            <div className="muted-row">No backend refs recorded.</div>
+          )}
+        </section>
+      ) : null}
     </>
   );
 }
 
-function InspectorTabs() {
+function TopSkillsList({ skills }: { skills: AtlasNodeRecord[] }) {
+  return (
+    <div className="top-skills">
+      {skills.map((skill, index) => (
+        <div key={skill.id} className="top-skill-row">
+          <span>{index + 1}</span>
+          <strong>{skill.name}</strong>
+          <div className="mini-dots">
+            {skill.tags.slice(0, 4).map((tag) => <i key={tag} style={{ background: skill.color }} />)}
+          </div>
+        </div>
+      ))}
+      {!skills.length ? <div className="muted-row">No skills in this domain.</div> : null}
+    </div>
+  );
+}
+
+function RelationshipList({
+  incoming,
+  outgoing
+}: {
+  incoming: SkillDetail["incoming_relationships"];
+  outgoing: SkillDetail["outgoing_relationships"];
+}) {
+  const rows = [
+    ...incoming.map((relationship) => ({
+      key: `incoming:${relationship.id}`,
+      label: relationship.type.replace("_", " "),
+      name: relationship.sourceName
+    })),
+    ...outgoing.map((relationship) => ({
+      key: `outgoing:${relationship.id}`,
+      label: relationship.type.replace("_", " "),
+      name: relationship.targetName
+    }))
+  ];
+  return (
+    <div className="reference-list">
+      {rows.map((row) => (
+        <div key={row.key} className="reference-row">
+          <span>{row.label}</span>
+          <strong>{row.name}</strong>
+        </div>
+      ))}
+      {!rows.length ? <div className="muted-row">No related skills recorded.</div> : null}
+    </div>
+  );
+}
+
+function InspectorTabs({
+  activeTab,
+  onTabChange
+}: {
+  activeTab: InspectorTab;
+  onTabChange: (tab: InspectorTab) => void;
+}) {
   return (
     <div className="inspector-tabs">
-      <button className="active" type="button">Overview</button>
-      <button type="button">Skills</button>
-      <button type="button">Excerpts</button>
-      <button type="button">Stats</button>
+      <button className={activeTab === "overview" ? "active" : ""} onClick={() => onTabChange("overview")} type="button">Overview</button>
+      <button className={activeTab === "skills" ? "active" : ""} onClick={() => onTabChange("skills")} type="button">Skills</button>
+      <button className={activeTab === "excerpts" ? "active" : ""} onClick={() => onTabChange("excerpts")} type="button">Excerpts</button>
+      <button className={activeTab === "stats" ? "active" : ""} onClick={() => onTabChange("stats")} type="button">Stats</button>
     </div>
   );
 }
@@ -598,7 +820,8 @@ function RoutePreviewStrip({
   routeLoading,
   routeHighlightEnabled,
   setRouteHighlightEnabled,
-  runRoutePreview
+  runRoutePreview,
+  inputRef
 }: {
   routeInput: string;
   setRouteInput: (value: string) => void;
@@ -607,6 +830,7 @@ function RoutePreviewStrip({
   routeHighlightEnabled: boolean;
   setRouteHighlightEnabled: (value: boolean) => void;
   runRoutePreview: () => void;
+  inputRef: RefObject<HTMLInputElement | null>;
 }) {
   const candidates = routePreview?.candidates ?? [];
   return (
@@ -615,6 +839,7 @@ function RoutePreviewStrip({
         <div>
           <strong>Route Preview</strong>
           <input
+            ref={inputRef}
             value={routeInput}
             onChange={(event) => setRouteInput(event.target.value)}
             onKeyDown={(event) => {
@@ -649,6 +874,15 @@ function RoutePreviewStrip({
         ))}
       </div>
     </section>
+  );
+}
+
+function EmptyGraphState() {
+  return (
+    <div className="empty-graph-state">
+      <strong>No matching skills</strong>
+      <span>Adjust search or filters to bring the graph back.</span>
+    </div>
   );
 }
 
@@ -713,4 +947,17 @@ function basename(path: string) {
 
 function storageKey(fingerprint: string) {
   return `skillroute-atlas-selected:${fingerprint}`;
+}
+
+function resolveSelectedId(payload: AtlasPayload, preferredId: string | null) {
+  if (preferredId?.startsWith("domain:")) {
+    const domainId = preferredId.replace("domain:", "");
+    if (payload.domains.some((domain) => domain.id === domainId)) {
+      return preferredId;
+    }
+  }
+  if (preferredId && payload.nodes.some((node) => node.id === preferredId)) {
+    return preferredId;
+  }
+  return `domain:${payload.domains[0]?.id ?? "uncategorized"}`;
 }
