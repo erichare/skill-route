@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from skillroute.backends import AstraDataAPIBackend
-from skillroute.cli import main
+from skillroute.cli import (
+    clamp_limit,
+    main,
+    parse_options_json,
+    require_payload_key,
+)
 
 
 def test_cli_index_and_route_json(tmp_path: Path, fixture_skills_root: Path, capsys) -> None:
@@ -83,7 +88,7 @@ description: Build MCP servers with route search inspect tools over and over.
     )
 
     output = capsys.readouterr().out
-    assert "1/1 golden route cases passed" in output
+    assert "4/4 golden route cases passed" in output
 
 
 def test_cli_backend_astra_upsert_saves_backend_refs(
@@ -526,3 +531,88 @@ def test_cli_traces_list_and_show(
     trace = json.loads(capsys.readouterr().out)
     assert trace["request"]["request"] == "Build an MCP server with tools"
     assert trace["response"]["candidates"][0]["name"] == "mcp-server-patterns"
+
+
+def test_parse_options_json_rejects_invalid_json() -> None:
+    with pytest.raises(SystemExit, match="not valid JSON"):
+        parse_options_json("{bad json}")
+    assert parse_options_json(None) is None
+    assert parse_options_json('{"a": 1}') == {"a": 1}
+
+
+def test_clamp_limit_bounds_values() -> None:
+    assert clamp_limit(0) == 1
+    assert clamp_limit(5) == 5
+    assert clamp_limit(9999) == 50
+    with pytest.raises(ValueError, match="Invalid limit"):
+        clamp_limit("not-a-number")
+
+
+def test_require_payload_key_reports_missing_key() -> None:
+    assert require_payload_key({"request": "x"}, "request") == "x"
+    with pytest.raises(ValueError, match="missing required key"):
+        require_payload_key({}, "request")
+
+
+def test_cli_route_text_output(tmp_path: Path, fixture_skills_root: Path, capsys) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "route", "Build an MCP server with tools"])
+    output = capsys.readouterr().out
+    assert "Ranked skills:" in output
+    assert "mcp-server-patterns" in output
+
+
+def test_cli_search_and_inspect_text_output(tmp_path: Path, fixture_skills_root: Path, capsys) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "search", "Astra vector backend"])
+    assert "astra-vector-backend" in capsys.readouterr().out
+    main(["--catalog", str(catalog_path), "inspect", "mcp-server-patterns"])
+    inspect_output = capsys.readouterr().out
+    assert "relationships:" in inspect_output
+
+
+def test_cli_inspect_missing_skill_exits(tmp_path: Path, fixture_skills_root: Path) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    with pytest.raises(SystemExit, match="Skill not found"):
+        main(["--catalog", str(catalog_path), "inspect", "no-such-skill"])
+
+
+def test_cli_eval_run_missing_cases_file_exits(tmp_path: Path, fixture_skills_root: Path) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    with pytest.raises(SystemExit, match="Could not run eval cases"):
+        main(
+            [
+                "--catalog",
+                str(catalog_path),
+                "eval",
+                "run",
+                "--fresh",
+                "--index-root",
+                str(fixture_skills_root),
+                "--cases",
+                str(tmp_path / "missing.json"),
+            ]
+        )
+
+
+def test_cli_create_collection_invalid_options_json_exits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ASTRA_DB_API_ENDPOINT", "https://example.com")
+    monkeypatch.setenv("ASTRA_DB_APPLICATION_TOKEN", "token")
+    with pytest.raises(SystemExit, match="not valid JSON"):
+        main(["backend", "astra", "create-collection", "--options-json", "{bad}"])
+
+
+def test_cli_unknown_backend_env_exits(
+    tmp_path: Path, fixture_skills_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SKILLROUTE_BACKEND", "bogus")
+    catalog_path = tmp_path / "catalog.db"
+    with pytest.raises(SystemExit, match="Unsupported SkillRoute backend"):
+        main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
