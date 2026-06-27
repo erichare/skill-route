@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Iterable
+import sys
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,7 @@ from skillroute.parser import discover_skill_files, parse_skill_bundle, parse_fr
 
 
 SCHEMA_VERSION = 1
+MAX_ROUTE_TRACES = 1000
 
 
 def default_catalog_path(base: Path | None = None) -> Path:
@@ -33,16 +36,32 @@ def default_catalog_path(base: Path | None = None) -> Path:
 class Catalog:
     def __init__(self, path: Path | str | None = None) -> None:
         self.path = Path(path).expanduser().resolve() if path else default_catalog_path()
+        self._initialized = False
 
     def connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        # WAL lets readers (the UI server) run concurrently with a writer (CLI
+        # index), and a busy timeout avoids immediate "database is locked".
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA busy_timeout = 5000")
         return connection
 
+    @contextmanager
+    def _session(self) -> Iterator[sqlite3.Connection]:
+        connection = self.connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def initialize(self) -> None:
-        with self.connect() as connection:
+        if self._initialized:
+            return
+        with self._session() as connection:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS schema_version (
@@ -98,34 +117,39 @@ class Catalog:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
-                CREATE TABLE IF NOT EXISTS eval_cases (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    request TEXT NOT NULL,
-                    expected_skill_ids_json TEXT NOT NULL,
-                    expected_skill_names_json TEXT NOT NULL,
-                    expect_clarification INTEGER NOT NULL DEFAULT 0
-                );
-
                 CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
                 CREATE INDEX IF NOT EXISTS idx_skills_root ON skills(root_path);
                 CREATE INDEX IF NOT EXISTS idx_excerpts_skill ON excerpts(skill_id);
+                CREATE INDEX IF NOT EXISTS idx_backend_refs_skill ON backend_index_refs(skill_id);
                 """
             )
             existing = connection.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0]
             if not existing:
                 connection.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+        self._initialized = True
+
+    def schema_version(self) -> int | None:
+        self.initialize()
+        with self._session() as connection:
+            row = connection.execute(
+                "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
+            ).fetchone()
+            return int(row[0]) if row else None
 
     def index_root(self, root: Path | str) -> list[SkillRecord]:
         root_path = Path(root).expanduser().resolve()
         overlays = load_overlays(root_path)
         skills: list[SkillRecord] = []
         for skill_file in discover_skill_files(root_path):
-            raw_text = skill_file.read_text(encoding="utf-8")
-            metadata, _ = parse_frontmatter(raw_text)
-            name = str(metadata.get("name") or skill_file.parent.name)
-            overlay = overlay_for_skill(overlays, skill_file, name, root=root_path)
-            skills.append(parse_skill_bundle(skill_file, root=root_path, overlay=overlay))
+            try:
+                raw_text = skill_file.read_text(encoding="utf-8")
+                metadata, _ = parse_frontmatter(raw_text)
+                name = str(metadata.get("name") or skill_file.parent.name)
+                overlay = overlay_for_skill(overlays, skill_file, name, root=root_path)
+                skills.append(parse_skill_bundle(skill_file, root=root_path, overlay=overlay))
+            except (OSError, ValueError, KeyError) as exc:
+                # Isolate failures so one malformed SKILL.md cannot abort the run.
+                print(f"skillroute: skipping {skill_file}: {exc}", file=sys.stderr)
         self.replace_root(root_path, skills)
         for backend_ref in LocalTokenBackend().upsert_skills(skills):
             self.save_backend_ref(
@@ -139,19 +163,16 @@ class Catalog:
     def replace_root(self, root: Path, skills: Iterable[SkillRecord]) -> None:
         self.initialize()
         root_path = str(root.resolve())
-        with self.connect() as connection:
-            existing = connection.execute(
-                "SELECT id FROM skills WHERE root_path = ?",
-                (root_path,),
-            ).fetchall()
-            for row in existing:
-                connection.execute("DELETE FROM skills WHERE id = ?", (row["id"],))
+        with self._session() as connection:
+            # ON DELETE CASCADE (with foreign_keys ON) removes the dependent
+            # excerpts, relationships, and backend refs in one statement.
+            connection.execute("DELETE FROM skills WHERE root_path = ?", (root_path,))
             for skill in skills:
                 self._upsert_skill(connection, skill)
 
     def upsert_skill(self, skill: SkillRecord) -> None:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             self._upsert_skill(connection, skill)
 
     def _upsert_skill(self, connection: sqlite3.Connection, skill: SkillRecord) -> None:
@@ -217,13 +238,13 @@ class Catalog:
 
     def list_skills(self) -> list[SkillRecord]:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             rows = connection.execute("SELECT * FROM skills ORDER BY name").fetchall()
             return [self._record_from_row(connection, row) for row in rows]
 
     def get_skill(self, skill_ref: str) -> SkillRecord | None:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             row = connection.execute(
                 """
                 SELECT * FROM skills
@@ -240,15 +261,25 @@ class Catalog:
 
     def record_route_trace(self, request: dict[str, Any], response: RouteResponse) -> None:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             connection.execute(
                 "INSERT INTO route_traces (request_json, response_json) VALUES (?, ?)",
                 (json.dumps(request, sort_keys=True), json.dumps(to_jsonable(response), sort_keys=True)),
             )
+            # Bound unbounded growth: keep only the most recent traces.
+            connection.execute(
+                """
+                DELETE FROM route_traces
+                WHERE id <= (
+                    SELECT id FROM route_traces ORDER BY id DESC LIMIT 1 OFFSET ?
+                )
+                """,
+                (MAX_ROUTE_TRACES,),
+            )
 
     def list_route_traces(self, limit: int = 20) -> list[dict[str, Any]]:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             rows = connection.execute(
                 """
                 SELECT id, request_json, response_json, created_at
@@ -262,7 +293,7 @@ class Catalog:
 
     def get_route_trace(self, trace_id: int) -> dict[str, Any] | None:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             row = connection.execute(
                 """
                 SELECT id, request_json, response_json, created_at
@@ -275,7 +306,7 @@ class Catalog:
 
     def save_backend_ref(self, skill_id: str, backend: str, ref: str, status: str) -> None:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             connection.execute(
                 """
                 INSERT INTO backend_index_refs (skill_id, backend, ref, status)
@@ -290,16 +321,39 @@ class Catalog:
 
     def backend_refs(self, skill_id: str) -> list[dict[str, Any]]:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             rows = connection.execute(
                 "SELECT backend, ref, status, updated_at FROM backend_index_refs WHERE skill_id = ?",
                 (skill_id,),
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def all_backend_refs(self) -> dict[str, list[dict[str, Any]]]:
+        """Return every skill's backend refs in a single query, keyed by skill_id.
+
+        Avoids the N+1 pattern of calling backend_refs() once per skill when
+        building the atlas payload or catalog summary.
+        """
+        self.initialize()
+        refs: dict[str, list[dict[str, Any]]] = {}
+        with self._session() as connection:
+            rows = connection.execute(
+                "SELECT skill_id, backend, ref, status, updated_at FROM backend_index_refs"
+            ).fetchall()
+        for row in rows:
+            refs.setdefault(row["skill_id"], []).append(
+                {
+                    "backend": row["backend"],
+                    "ref": row["ref"],
+                    "status": row["status"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+        return refs
+
     def backend_ref_summary(self, backend: str) -> dict[str, Any]:
         self.initialize()
-        with self.connect() as connection:
+        with self._session() as connection:
             rows = connection.execute(
                 """
                 SELECT status, COUNT(*) AS count
