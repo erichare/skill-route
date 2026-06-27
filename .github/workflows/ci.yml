@@ -10,8 +10,12 @@ permissions:
 
 jobs:
   python:
-    name: Python
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -19,21 +23,67 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v8.2.0
         with:
-          cache-suffix: python
+          cache-suffix: python-${{ matrix.python-version }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Run tests
-        run: uv run --extra dev pytest
+      - name: Verify lockfile is up to date
+        run: uv lock --check
+
+      - name: Run tests with coverage
+        run: uv run --frozen --extra dev pytest --cov=skillroute --cov-report=term-missing --cov-fail-under=80
 
       - name: Run lint
-        run: uv run --extra dev ruff check .
+        run: uv run --frozen --extra dev ruff check .
 
       - name: Run example golden routes
-        run: uv run --extra dev skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
+        run: uv run --frozen --extra dev skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
+
+      - name: Audit Python dependencies
+        run: |
+          uv export --frozen --no-emit-project --no-hashes --format requirements-txt -o requirements-audit.txt
+          uvx pip-audit --no-deps -r requirements-audit.txt
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck web
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Lint web
+        working-directory: web
+        run: npm run lint
+
+      - name: Test web
+        working-directory: web
+        run: npm run test
+
+      - name: Build web
+        working-directory: web
+        run: npm run build
+
+      - name: Audit web dependencies
+        working-directory: web
+        run: npm audit --audit-level=high
 
   mcp:
     name: MCP
@@ -70,6 +120,10 @@ jobs:
       - name: Typecheck MCP server
         working-directory: mcp
         run: npm run typecheck
+
+      - name: Audit MCP dependencies
+        working-directory: mcp
+        run: npm audit --audit-level=high
 
       - name: Smoke test MCP tools
         working-directory: mcp

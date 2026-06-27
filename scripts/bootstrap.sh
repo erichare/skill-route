@@ -19,13 +19,13 @@ echo "==> Installing Python dev environment"
 uv sync --extra dev
 
 echo "==> Installing MCP server dependencies"
-npm --prefix mcp install
+npm --prefix mcp ci
 
 echo "==> Building MCP server"
 npm --prefix mcp run build
 
 echo "==> Installing Skill Atlas web dependencies"
-npm --prefix web install
+npm --prefix web ci
 
 echo "==> Building Skill Atlas web UI"
 npm --prefix web run build

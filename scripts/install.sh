@@ -300,9 +300,9 @@ main() {
   cd "$INSTALL_DIR"
 
   run_confirmed "Install Python environment with uv" uv sync --extra dev
-  run_confirmed "Install MCP server Node dependencies" npm --prefix mcp install
+  run_confirmed "Install MCP server Node dependencies" npm --prefix mcp ci
   run_confirmed "Build MCP server" npm --prefix mcp run build
-  run_confirmed "Install Skill Atlas web dependencies" npm --prefix web install
+  run_confirmed "Install Skill Atlas web dependencies" npm --prefix web ci
   run_confirmed "Build Skill Atlas web UI" npm --prefix web run build
   run_confirmed "Index example skills" uv run skillroute index --root examples/skills
 

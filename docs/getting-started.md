@@ -36,9 +36,13 @@ Manual setup is also supported:
 
 ```bash
 uv sync --extra dev
-npm --prefix mcp install
+npm --prefix mcp ci
 npm --prefix mcp run build
+npm --prefix web ci
+npm --prefix web run build
 ```
+
+The web build is required before `skillroute ui` can serve the Skill Atlas.
 
 ## Index Example Skills
 
