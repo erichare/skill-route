@@ -12,5 +12,6 @@ def test_golden_route_eval_passes(indexed_catalog: Catalog) -> None:
 
     results = run_golden_routes(Router(indexed_catalog), cases)
 
-    assert [result.passed for result in results] == [True]
+    assert len(results) == 4
+    assert all(result.passed for result in results)
 

@@ -78,6 +78,7 @@ class RouteCandidate:
     evidence: list[SkillExcerpt]
     score_breakdown: ScoreBreakdown
     suggested_position: int
+    content_hash: str = ""
 
 
 @dataclass(slots=True)

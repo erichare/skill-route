@@ -5,7 +5,23 @@ from pathlib import Path
 import pytest
 
 from skillroute.models import SkillRelationship
-from skillroute.parser import parse_skill_bundle
+from skillroute.parser import parse_simple_yaml, parse_skill_bundle
+
+
+def test_parse_simple_yaml_block_list() -> None:
+    metadata = parse_simple_yaml("tags:\n  - python\n  - testing")
+    assert metadata["tags"] == ["python", "testing"]
+
+
+def test_parse_simple_yaml_inline_scalar_then_list_does_not_crash() -> None:
+    # Malformed YAML (inline scalar followed by a block list) must not abort indexing.
+    metadata = parse_simple_yaml("tags: python\n  - testing")
+    assert metadata["tags"] == ["python", "testing"]
+
+
+def test_parse_simple_yaml_nested_mapping_is_captured() -> None:
+    metadata = parse_simple_yaml("relationships:\n  requires: other-skill")
+    assert metadata["relationships"] == {"requires": "other-skill"}
 
 
 def test_parse_skill_bundle_includes_metadata_excerpts_and_references(fixture_skills_root: Path) -> None:
