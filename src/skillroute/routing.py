@@ -78,6 +78,7 @@ class Router:
                     "skill_id": skill.id,
                     "name": skill.name,
                     "description": skill.description,
+                    "content_hash": skill.content_hash,
                     "score": round(total, 4),
                     "lexical_score": round(lexical, 4),
                     "backend": backend_hit.get("backend"),
@@ -134,6 +135,7 @@ class Router:
                         total=round(total, 4),
                     ),
                     suggested_position=0,
+                    content_hash=skill.content_hash,
                 )
             )
         candidates.sort(key=lambda candidate: candidate.score_breakdown.total, reverse=True)
@@ -254,7 +256,7 @@ def dedupe_candidates(candidates: list[RouteCandidate]) -> list[RouteCandidate]:
     seen: set[str] = set()
     unique: list[RouteCandidate] = []
     for candidate in candidates:
-        key = candidate.name.casefold()
+        key = _dedupe_key(candidate.content_hash, candidate.skill_id)
         if key in seen:
             continue
         seen.add(key)
@@ -266,9 +268,15 @@ def dedupe_search_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
     for row in rows:
-        key = str(row["name"]).casefold()
+        key = _dedupe_key(str(row.get("content_hash", "")), str(row["skill_id"]))
         if key in seen:
             continue
         seen.add(key)
         unique.append(row)
     return unique
+
+
+def _dedupe_key(content_hash: str, skill_id: str) -> str:
+    """Collapse the same skill registered under multiple roots (identical content
+    hash) while keeping genuinely distinct skills that merely share a name."""
+    return content_hash or skill_id

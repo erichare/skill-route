@@ -89,3 +89,25 @@ Use this skill for MCP routing.
 
     assert [candidate.name for candidate in response.candidates].count("duplicate-skill") == 1
     assert [row["name"] for row in rows].count("duplicate-skill") == 1
+
+
+def test_distinct_skills_sharing_a_name_are_not_collapsed(tmp_path: Path) -> None:
+    bodies = {
+        "first": "Use this skill for MCP routing servers and tools.",
+        "second": "Use this skill for MCP routing pipelines and queues.",
+    }
+    for root_name, body in bodies.items():
+        skill_dir = tmp_path / root_name / "shared-name"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: shared-name\ndescription: {body}\n---\n\n# Shared Name\n\n{body}\n",
+            encoding="utf-8",
+        )
+    catalog = Catalog(tmp_path / "catalog.db")
+    catalog.index_root(tmp_path / "first")
+    catalog.index_root(tmp_path / "second")
+
+    response = Router(catalog).route("MCP routing shared name", limit=5)
+
+    # Different content hashes => both distinct skills survive deduplication.
+    assert [candidate.name for candidate in response.candidates].count("shared-name") == 2

@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
+from collections.abc import Callable
 from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from skillroute.backends import AstraDataAPIBackend, AstraDataAPIError, LocalTokenBackend, RetrievalBackend
+from skillroute.backends import (
+    BACKEND_CHOICES,
+    AstraDataAPIBackend,
+    AstraDataAPIError,
+    RetrievalBackend,
+    backend_from_name,
+)
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
@@ -22,9 +28,6 @@ from skillroute.mcp_setup import (
 )
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
-
-
-BACKEND_CHOICES = ("local", "local-token", "astra", "astra-data-api")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -46,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     index_parser = subparsers.add_parser("index", help="Index SKILL.md bundles under a root")
     index_parser.add_argument("--root", type=Path, required=True)
+    add_backend_argument(index_parser)
     index_parser.set_defaults(func=cmd_index)
 
     route_parser = subparsers.add_parser("route", help="Route a request to ranked skills")
@@ -228,20 +232,19 @@ def backend_from_args(args: argparse.Namespace) -> RetrievalBackend:
         raise SystemExit(str(exc)) from exc
 
 
-def backend_from_name(name: str | None) -> RetrievalBackend:
-    configured = (name or os.environ.get("SKILLROUTE_BACKEND") or "local").strip().lower()
-    if configured in {"local", "local-token"}:
-        return LocalTokenBackend()
-    if configured in {"astra", "astra-data-api"}:
-        return AstraDataAPIBackend.from_env()
-    valid = ", ".join(BACKEND_CHOICES)
-    raise ValueError(f"Unsupported SkillRoute backend {configured!r}; expected one of: {valid}")
-
-
 def cmd_index(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
+    backend = backend_from_args(args)
     skills = catalog.index_root(args.root)
     print(f"Indexed {len(skills)} skills into {catalog.path}")
+    if backend.name != "local-token":
+        refs = run_astra_command(lambda: backend.upsert_skills(skills))
+        for ref in refs:
+            catalog.save_backend_ref(
+                ref["skill_id"], ref["backend"], ref["ref"], ref.get("status", "indexed")
+            )
+        statuses = count_ref_statuses(refs)
+        print(f"Wrote {len(refs)} {backend.name} refs: {json.dumps(statuses, sort_keys=True)}")
 
 
 def cmd_route(args: argparse.Namespace) -> None:
@@ -302,7 +305,10 @@ def cmd_eval_run(args: argparse.Namespace) -> None:
         catalog = Catalog(Path(temp_dir) / "catalog.db") if temp_dir else catalog_from_args(args)
         for root in args.index_root:
             catalog.index_root(root)
-        results = run_golden_routes(Router(catalog, backend=backend_from_args(args)), args.cases)
+        try:
+            results = run_golden_routes(Router(catalog, backend=backend_from_args(args)), args.cases)
+        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise SystemExit(f"Could not run eval cases from {args.cases}: {exc}") from exc
     if args.as_json:
         print_json(results)
         return
@@ -432,7 +438,7 @@ def cmd_backend_status(args: argparse.Namespace) -> None:
 
 def cmd_backend_astra_create_collection(args: argparse.Namespace) -> None:
     backend = AstraDataAPIBackend.from_env()
-    options = json.loads(args.options_json) if args.options_json else None
+    options = parse_options_json(args.options_json)
     result = run_astra_command(lambda: backend.create_collection(options))
     if args.as_json:
         print_json(result)
@@ -506,11 +512,20 @@ def cmd_ui(args: argparse.Namespace) -> None:
     )
 
 
-def run_astra_command(operation):
+def run_astra_command(operation: Callable[[], Any]) -> Any:
     try:
         return operation()
     except AstraDataAPIError as exc:
         raise SystemExit(str(exc)) from exc
+
+
+def parse_options_json(raw: str | None) -> dict[str, Any] | None:
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"--options-json is not valid JSON: {exc}") from exc
 
 
 def count_ref_statuses(refs: list[dict[str, Any]]) -> dict[str, int]:
@@ -569,25 +584,48 @@ def print_trace(trace: dict[str, Any]) -> None:
         print(f"   scores: {json.dumps(score_breakdown, sort_keys=True)}")
 
 
+BRIDGE_LIMIT_MAX = 50
+
+
 def cmd_bridge(args: argparse.Namespace) -> None:
     payload = json.loads(sys.stdin.read() or "{}")
     catalog = Catalog(payload.get("catalog") or args.catalog or default_catalog_path())
     router = Router(catalog, backend=backend_from_name(payload.get("backend")))
+    result: Any
     if args.operation == "route":
-        result = router.route(
-            payload["request"],
-            repo=payload.get("repo"),
-            limit=int(payload.get("limit", 5)),
+        result = to_jsonable(
+            router.route(
+                require_payload_key(payload, "request"),
+                repo=payload.get("repo"),
+                limit=clamp_limit(payload.get("limit", 5)),
+            )
         )
     elif args.operation == "search":
-        result = router.search(payload["query"], limit=int(payload.get("limit", 10)))
+        result = router.search(
+            require_payload_key(payload, "query"), limit=clamp_limit(payload.get("limit", 10))
+        )
     else:
-        skill = catalog.get_skill(payload["skill_id"])
+        skill_id = require_payload_key(payload, "skill_id")
+        skill = catalog.get_skill(skill_id)
         if skill is None:
-            raise ValueError(f"Skill not found: {payload['skill_id']}")
+            raise ValueError(f"Skill not found: {skill_id}")
         result = to_jsonable(skill)
         result["backend_refs"] = catalog.backend_refs(skill.id)
     print_json(result)
+
+
+def require_payload_key(payload: dict[str, Any], key: str) -> Any:
+    if key not in payload:
+        raise ValueError(f"Bridge payload is missing required key: {key!r}")
+    return payload[key]
+
+
+def clamp_limit(value: Any) -> int:
+    try:
+        limit = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid limit: {value!r}") from exc
+    return max(1, min(limit, BRIDGE_LIMIT_MAX))
 
 
 def print_route(response: Any) -> None:

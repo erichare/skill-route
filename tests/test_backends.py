@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from skillroute.backends import AstraDataAPIBackend, AstraDataAPIError, LocalTokenBackend
+from skillroute.backends import (
+    AstraDataAPIBackend,
+    AstraDataAPIError,
+    LangChainBackendAdapter,
+    LocalTokenBackend,
+    backend_from_name,
+)
 from skillroute.catalog import Catalog
 
 
@@ -185,3 +191,69 @@ def test_astra_backend_raises_sanitized_error_on_data_api_errors() -> None:
 
     assert "bad request" in str(exc_info.value)
     assert "secret-token" not in str(exc_info.value)
+
+
+def test_astra_token_excluded_from_repr() -> None:
+    backend = AstraDataAPIBackend(
+        endpoint="https://db.apps.astra.datastax.com",
+        token="super-secret-token",
+        embedding_api_key="super-secret-embedding",
+    )
+    rendered = repr(backend)
+    assert "super-secret-token" not in rendered
+    assert "super-secret-embedding" not in rendered
+
+
+def test_backend_from_name_resolves_known_backends() -> None:
+    assert backend_from_name(None).name == "local-token"
+    assert backend_from_name("local").name == "local-token"
+    assert backend_from_name("astra").name == "astra-data-api"
+
+
+def test_backend_from_name_uses_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SKILLROUTE_BACKEND", "astra")
+    assert backend_from_name(None).name == "astra-data-api"
+
+
+def test_backend_from_name_rejects_unknown() -> None:
+    with pytest.raises(ValueError, match="Unsupported SkillRoute backend"):
+        backend_from_name("nope")
+
+
+class FakeDocument:
+    def __init__(self, skill_id: str) -> None:
+        self.metadata = {"skill_id": skill_id, "name": skill_id}
+
+
+class FakeVectorstore:
+    def __init__(self) -> None:
+        self.added: list[dict] = []
+
+    def add_documents(self, documents):
+        self.added = documents
+        return [f"ref-{index}" for index, _ in enumerate(documents)]
+
+    def similarity_search_with_score(self, query, k=10):
+        return [(FakeDocument("python-testing"), 0.42)]
+
+
+def test_langchain_adapter_upsert_and_search(indexed_catalog: Catalog) -> None:
+    skills = indexed_catalog.list_skills()
+    store = FakeVectorstore()
+    backend = LangChainBackendAdapter(vectorstore=store)
+
+    refs = backend.upsert_skills(skills)
+    assert refs and refs[0]["backend"] == "langchain"
+    assert len(store.added) == len(skills)
+
+    rows = backend.search("pytest", skills, limit=3)
+    assert rows == [{"skill_id": "python-testing", "backend": "langchain", "score": 0.42}]
+
+
+def test_langchain_adapter_status() -> None:
+    status = LangChainBackendAdapter(vectorstore=FakeVectorstore()).status()
+    assert status["configured"] is True
+    assert status["search_available"] is True
+
+    missing = LangChainBackendAdapter(vectorstore=None).status()
+    assert missing["status"] == "not_configured"

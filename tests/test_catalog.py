@@ -81,3 +81,51 @@ def test_route_traces_can_be_listed_and_loaded(indexed_catalog: Catalog) -> None
     trace = indexed_catalog.get_route_trace(traces[0]["id"])
     assert trace is not None
     assert trace["response"]["candidates"][0]["name"] == "mcp-server-patterns"
+
+
+def test_all_backend_refs_returns_one_query_keyed_by_skill(indexed_catalog: Catalog) -> None:
+    skills = indexed_catalog.list_skills()
+    indexed_catalog.save_backend_ref(skills[0].id, "astra-data-api", "ref-1", "indexed")
+
+    all_refs = indexed_catalog.all_backend_refs()
+
+    assert all_refs[skills[0].id]
+    backends = {ref["backend"] for ref in all_refs[skills[0].id]}
+    assert "astra-data-api" in backends
+    assert all_refs[skills[0].id] == indexed_catalog.backend_refs(skills[0].id)
+
+
+def test_schema_version_is_readable(indexed_catalog: Catalog) -> None:
+    assert indexed_catalog.schema_version() == 1
+
+
+def test_route_traces_are_pruned_to_max(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("skillroute.catalog.MAX_ROUTE_TRACES", 3)
+    catalog = Catalog(tmp_path / "catalog.db")
+    router = Router(catalog)
+    for index in range(6):
+        router.route(f"Build an MCP server variant {index}", limit=1)
+
+    traces = catalog.list_route_traces(limit=100)
+    assert len(traces) == 3
+
+
+def test_index_root_skips_malformed_skill(tmp_path: Path, capsys) -> None:
+    good = tmp_path / "good"
+    good.mkdir()
+    (good / "SKILL.md").write_text(
+        "---\nname: good-skill\ndescription: A valid skill.\n---\n\n# Good\n",
+        encoding="utf-8",
+    )
+    bad = tmp_path / "bad"
+    bad.mkdir()
+    # Invalid UTF-8 bytes raise UnicodeDecodeError while reading the bundle.
+    (bad / "SKILL.md").write_bytes(b"---\nname: bad-skill\n---\n\xff\xfe not utf-8\n")
+
+    catalog = Catalog(tmp_path / "catalog.db")
+    skills = catalog.index_root(tmp_path)
+
+    names = {skill.name for skill in skills}
+    assert "good-skill" in names
+    assert len(skills) == 1
+    assert "skipping" in capsys.readouterr().err

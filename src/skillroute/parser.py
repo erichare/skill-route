@@ -121,10 +121,13 @@ def parse_simple_yaml(text: str) -> dict[str, Any]:
         line = raw_line.rstrip()
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        if line.startswith((" ", "\t")) and current_key:
+        if line.startswith((" ", "\t")) and current_key is not None:
             value = line.strip()
             if value.startswith("- "):
-                metadata.setdefault(current_key, []).append(parse_scalar(value[2:].strip()))
+                _append_list_item(metadata, current_key, parse_scalar(value[2:].strip()))
+            elif ":" in value:
+                nested_key, nested_value = value.split(":", 1)
+                _set_nested_value(metadata, current_key, nested_key.strip(), parse_scalar(nested_value.strip()))
             continue
         if ":" not in line:
             continue
@@ -137,6 +140,25 @@ def parse_simple_yaml(text: str) -> dict[str, Any]:
         else:
             metadata[key] = parse_scalar(value)
     return metadata
+
+
+def _append_list_item(metadata: dict[str, Any], key: str, item: Any) -> None:
+    existing = metadata.get(key)
+    if isinstance(existing, list):
+        existing.append(item)
+        return
+    # An inline scalar followed by a block list is malformed YAML; coerce the
+    # scalar into the list instead of crashing on the indexing run.
+    metadata[key] = [] if existing in (None, "", []) else [existing]
+    metadata[key].append(item)
+
+
+def _set_nested_value(metadata: dict[str, Any], key: str, nested_key: str, value: Any) -> None:
+    existing = metadata.get(key)
+    if not isinstance(existing, dict):
+        existing = {}
+        metadata[key] = existing
+    existing[nested_key] = value
 
 
 def parse_scalar(value: str) -> Any:

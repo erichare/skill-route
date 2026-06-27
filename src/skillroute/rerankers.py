@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 from typing import Protocol
 
@@ -30,15 +31,20 @@ class ExternalCommandReranker:
         self.command = command
 
     def rerank(self, request: str, candidates: list[RouteCandidate]) -> list[RouteCandidate]:
+        argv = shlex.split(self.command)
+        if not argv:
+            return candidates
         payload = {"request": request, "candidates": to_jsonable(candidates)}
-        completed = subprocess.run(
-            self.command,
-            input=json.dumps(payload),
-            text=True,
-            capture_output=True,
-            shell=True,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                argv,
+                input=json.dumps(payload),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        except OSError:
+            return candidates
         if completed.returncode != 0:
             return candidates
         try:
@@ -51,8 +57,6 @@ class ExternalCommandReranker:
         by_id = {candidate.skill_id: candidate for candidate in candidates}
         ordered = [by_id[skill_id] for skill_id in ordered_ids if skill_id in by_id]
         ordered.extend(candidate for candidate in candidates if candidate.skill_id not in ordered_ids)
-        for index, candidate in enumerate(ordered, start=1):
-            candidate.suggested_position = index
         return ordered
 
 

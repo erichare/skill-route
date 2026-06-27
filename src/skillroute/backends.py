@@ -13,6 +13,9 @@ from skillroute.models import SkillRecord
 from skillroute.text import keyword_score, unique_tokens
 
 
+BACKEND_CHOICES = ("local", "local-token", "astra", "astra-data-api")
+
+
 class RetrievalBackend(Protocol):
     name: str
 
@@ -74,7 +77,7 @@ class LocalTokenBackend:
 class AstraDataAPIBackend:
     collection: str = "skillroute_skills"
     endpoint: str | None = None
-    token: str | None = None
+    token: str | None = field(default=None, repr=False)
     keyspace: str = "default_keyspace"
     timeout_seconds: float = 30.0
     use_vectorize: bool = True
@@ -364,3 +367,18 @@ def env_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def backend_from_name(name: str | None) -> RetrievalBackend:
+    """Resolve a retrieval backend by name.
+
+    Single source of truth shared by the CLI, the bridge, and the UI server so
+    they agree on the SKILLROUTE_BACKEND fallback and the set of valid names.
+    """
+    configured = (name or os.environ.get("SKILLROUTE_BACKEND") or "local").strip().lower()
+    if configured in {"local", "local-token"}:
+        return LocalTokenBackend()
+    if configured in {"astra", "astra-data-api"}:
+        return AstraDataAPIBackend.from_env()
+    valid = ", ".join(BACKEND_CHOICES)
+    raise ValueError(f"Unsupported SkillRoute backend {configured!r}; expected one of: {valid}")

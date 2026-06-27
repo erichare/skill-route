@@ -46,14 +46,17 @@ def build_atlas_payload(catalog: Catalog) -> dict[str, Any]:
     resolver = RelationshipResolver(skills)
     domains = domain_summary(skills)
     edges, unresolved, incoming = relationship_graph(skills, resolver)
+    backend_refs = catalog.all_backend_refs()
     nodes = [
-        atlas_node(skill, catalog.backend_refs(skill.id), unresolved[skill.id], incoming[skill.id])
+        atlas_node(skill, backend_refs.get(skill.id, []), unresolved[skill.id], incoming[skill.id])
         for skill in skills
     ]
     relationship_counts = Counter(edge["type"] for edge in edges)
     return {
         "catalog": {
-            **catalog_summary(catalog, skills=skills, edges=edges, unresolved=unresolved),
+            **catalog_summary(
+                catalog, skills=skills, edges=edges, unresolved=unresolved, backend_refs=backend_refs
+            ),
             "fingerprint": catalog_fingerprint(catalog, skills),
         },
         "domains": domains,
@@ -81,15 +84,18 @@ def catalog_summary(
     skills: list[SkillRecord] | None = None,
     edges: list[dict[str, Any]] | None = None,
     unresolved: dict[str, list[SkillRelationship]] | None = None,
+    backend_refs: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     skills = skills if skills is not None else catalog.list_skills()
     domains = {primary_domain(skill) for skill in skills}
     if edges is None or unresolved is None:
         resolver = RelationshipResolver(skills)
         edges, unresolved, _ = relationship_graph(skills, resolver)
+    if backend_refs is None:
+        backend_refs = catalog.all_backend_refs()
     backend_counts: Counter[str] = Counter()
     for skill in skills:
-        for ref in catalog.backend_refs(skill.id):
+        for ref in backend_refs.get(skill.id, []):
             backend_counts[f"{ref['backend']}:{ref['status']}"] += 1
     return {
         "path": str(catalog.path),

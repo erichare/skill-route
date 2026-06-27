@@ -7,6 +7,12 @@ __pycache__/
 *.egg-info/
 *.pyc
 
+.env
+.env.*
+!.env.example
+
+requirements-audit.txt
+
 mcp/build/
 mcp/node_modules/
 web/dist/

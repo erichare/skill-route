@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "SkillRoute MCP stdio server",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "skillroute-mcp": "build/index.js"
   },

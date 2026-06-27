@@ -65,7 +65,7 @@ Trace inspection:
 - Hybrid routing over lexical metadata, local/remote retrieval, repo context,
   and skill graph signals.
 - Local SQLite catalog with skills, excerpts, relationships, backend refs,
-  route traces, and eval cases.
+  and route traces.
 - Optional Astra DB Data API retrieval backend.
 - TypeScript MCP server exposing `skillroute.route`, `skillroute.search`, and
   `skillroute.inspect_skill`.
@@ -113,8 +113,8 @@ uv run skillroute ui
 ## Development
 
 ```bash
-uv run --extra dev pytest
+uv run --extra dev pytest --cov=skillroute --cov-report=term-missing
 uv run --extra dev ruff check .
-npm --prefix web run build && npm --prefix web run typecheck && npm --prefix web run test
-cd mcp && npm run build && npm run typecheck && npm run smoke
+npm --prefix web ci && npm --prefix web run typecheck && npm --prefix web run lint && npm --prefix web run test && npm --prefix web run build
+cd mcp && npm ci && npm run build && npm run typecheck && npm run smoke
 ```

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import os
+import socket
+import threading
+import time
 import webbrowser
 from pathlib import Path
 from typing import Any
 
 from skillroute.atlas import build_atlas_payload, catalog_summary, route_preview_payload, skill_detail_payload
-from skillroute.backends import AstraDataAPIBackend, LocalTokenBackend, RetrievalBackend
+from skillroute.backends import backend_from_name
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.routing import Router
 
@@ -108,20 +112,35 @@ def run_ui(
             "SkillRoute UI build not found. Run `npm --prefix web install && npm --prefix web run build`."
         )
     app = create_app(catalog_path=catalog_path, web_dist=dist)
-    url = f"http://{host}:{port}"
     if open_browser:
-        webbrowser.open(url)
+        _open_browser_when_ready(host, port)
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
+def _open_browser_when_ready(host: str, port: int, timeout: float = 10.0) -> None:
+    """Open the browser only after the server accepts connections.
+
+    uvicorn.run blocks, so opening the browser beforehand races the server
+    startup and can land on a connection-refused page.
+    """
+    connect_host = "127.0.0.1" if host in {"0.0.0.0", ""} else host
+    url = f"http://{connect_host}:{port}"
+
+    def wait_and_open() -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((connect_host, port), timeout=0.5):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        webbrowser.open(url)
+
+    threading.Thread(target=wait_and_open, daemon=True).start()
+
+
 def default_web_dist() -> Path:
+    override = os.environ.get("SKILLROUTE_WEB_DIST")
+    if override:
+        return Path(override).expanduser().resolve()
     return Path(__file__).resolve().parents[2] / "web" / "dist"
-
-
-def backend_from_name(name: str | None) -> RetrievalBackend:
-    configured = (name or "local").strip().lower()
-    if configured in {"local", "local-token"}:
-        return LocalTokenBackend()
-    if configured in {"astra", "astra-data-api"}:
-        return AstraDataAPIBackend.from_env()
-    raise ValueError(f"Unsupported SkillRoute backend {configured!r}")
