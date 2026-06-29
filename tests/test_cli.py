@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
@@ -616,3 +617,95 @@ def test_cli_unknown_backend_env_exits(
     catalog_path = tmp_path / "catalog.db"
     with pytest.raises(SystemExit, match="Unsupported SkillRoute backend"):
         main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+
+
+def test_cli_bridge_route_search_inspect_in_process(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"request": "Astra vector backend"})))
+    main(["--catalog", str(catalog_path), "bridge", "route"])
+    route_payload = json.loads(capsys.readouterr().out)
+    assert route_payload["candidates"][0]["name"] == "astra-vector-backend"
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"query": "MCP server tools"})))
+    main(["--catalog", str(catalog_path), "bridge", "search"])
+    search_payload = json.loads(capsys.readouterr().out)
+    assert any(row["name"] == "mcp-server-patterns" for row in search_payload)
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"skill_id": "mcp-server-patterns"})))
+    main(["--catalog", str(catalog_path), "bridge", "inspect"])
+    inspect_payload = json.loads(capsys.readouterr().out)
+    assert inspect_payload["name"] == "mcp-server-patterns"
+    assert "backend_refs" in inspect_payload
+
+
+def test_cli_bridge_error_is_reported_as_json_and_exits(
+    tmp_path: Path,
+    fixture_skills_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"skill_id": "does-not-exist"})))
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--catalog", str(catalog_path), "bridge", "inspect"])
+
+    assert exc_info.value.code == 1
+    error_payload = json.loads(capsys.readouterr().out)
+    assert error_payload["error"]["type"] == "ValueError"
+    assert "does-not-exist" in error_payload["error"]["message"]
+
+
+def test_cli_route_empty_catalog_recommends_clarification(tmp_path: Path, capsys) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "route", "nothing matches this request"])
+    output = capsys.readouterr().out
+    assert "Clarification recommended:" in output
+    assert "No matching skills." in output
+
+
+def test_cli_search_empty_catalog_reports_no_matches(tmp_path: Path, capsys) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "search", "nothing matches this query"])
+    assert "No matching skills." in capsys.readouterr().out
+
+
+def test_cli_backend_status_text_output(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "backend", "status"])
+    output = capsys.readouterr().out
+    assert "status=" in output
+    assert "configured:" in output
+    assert "catalog:" in output
+
+
+def test_cli_traces_list_and_show_text_output(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    main(["--catalog", str(catalog_path), "route", "Build an MCP server with tools"])
+    capsys.readouterr()
+
+    main(["--catalog", str(catalog_path), "traces", "list"])
+    list_output = capsys.readouterr().out
+    assert "request: Build an MCP server with tools" in list_output
+
+    main(["--catalog", str(catalog_path), "traces", "show", "1"])
+    show_output = capsys.readouterr().out
+    assert "Trace 1" in show_output
+    assert "request: Build an MCP server with tools" in show_output

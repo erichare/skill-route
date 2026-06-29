@@ -94,7 +94,7 @@ class RouteResponse:
 def to_jsonable(value: Any) -> Any:
     if isinstance(value, StrEnum):
         return value.value
-    if is_dataclass(value):
+    if is_dataclass(value) and not isinstance(value, type):
         return {key: to_jsonable(item) for key, item in asdict(value).items()}
     if isinstance(value, dict):
         return {str(key): to_jsonable(item) for key, item in value.items()}

@@ -70,3 +70,37 @@ def test_cli_dogfood_index_json(tmp_path: Path, capsys) -> None:
     assert payload["roots"][0]["skill_count"] == 1
     assert Catalog(catalog_path).get_skill("agent-skill") is not None
 
+
+def test_cli_dogfood_roots_text_lists_roots(tmp_path: Path, capsys) -> None:
+    write_skill(tmp_path / ".codex" / "skills", "codex-skill")
+
+    main(["dogfood", "roots", "--home", str(tmp_path)])
+
+    output = capsys.readouterr().out
+    assert str(tmp_path / ".codex" / "skills") in output
+    assert "(1 skills)" in output
+
+
+def test_cli_dogfood_roots_text_reports_empty(tmp_path: Path, capsys) -> None:
+    main(["dogfood", "roots", "--home", str(tmp_path)])
+
+    assert "No default skill roots found." in capsys.readouterr().out
+
+
+def test_cli_dogfood_index_text_lists_indexed_roots(tmp_path: Path, capsys) -> None:
+    write_skill(tmp_path / ".agents" / "skills", "agent-skill")
+    catalog_path = tmp_path / "catalog.db"
+
+    main(["--catalog", str(catalog_path), "dogfood", "index", "--home", str(tmp_path)])
+
+    output = capsys.readouterr().out
+    assert f"Indexed 1 skills into {catalog_path}" in output
+    assert "(1 skills)" in output
+
+
+def test_cli_dogfood_index_text_reports_empty(tmp_path: Path, capsys) -> None:
+    catalog_path = tmp_path / "catalog.db"
+
+    main(["--catalog", str(catalog_path), "dogfood", "index", "--home", str(tmp_path)])
+
+    assert "No default skill roots found." in capsys.readouterr().out

@@ -46,9 +46,9 @@ def collect_repo_context(repo: Path | None) -> dict[str, Any]:
         if ".git" in path.parts or path.is_dir():
             continue
         file_count += 1
-        language = LANGUAGE_EXTENSIONS.get(path.suffix)
-        if language:
-            languages.add(language)
+        mapped_language = LANGUAGE_EXTENSIONS.get(path.suffix)
+        if mapped_language:
+            languages.add(mapped_language)
         if file_count >= 1000:
             signals.add("truncated_file_scan")
             break

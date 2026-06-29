@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from skillroute import client_setup
 from skillroute.client_setup import (
     ClientDetection,
     ClientEnvironment,
@@ -14,6 +15,7 @@ from skillroute.client_setup import (
     apply_client_setup,
     detect_clients,
     merge_json_config,
+    run_detect_command,
     run_setup_command,
     select_clients,
 )
@@ -209,3 +211,101 @@ def test_setup_command_skips_prompt_mode_without_tty(
     output = capsys.readouterr().out
     assert "Detected agent clients:" in output
     assert NO_TTY_SETUP_MESSAGE in output
+
+def test_apply_json_merge_client_writes_config(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    config_path = tmp_path / "bob" / "mcp.json"
+    detection = ClientDetection(
+        "ibm-bob", "IBM Bob", True, "found", "json_merge", config_path=str(config_path)
+    )
+
+    result = apply_client_setup(
+        detection,
+        repo_root=repo_root,
+        catalog=tmp_path / "catalog.db",
+        yes=True,
+    )
+
+    assert result.status == "configured"
+    assert result.backup_path is None
+    assert config_path.exists()
+
+
+def test_apply_client_setup_mode_zero_skips_without_writing(tmp_path: Path) -> None:
+    config_path = tmp_path / "mcp.json"
+    detection = ClientDetection(
+        "ibm-bob", "IBM Bob", True, "found", "json_merge", config_path=str(config_path)
+    )
+
+    result = apply_client_setup(detection, repo_root=tmp_path, mode="0")
+
+    assert result.status == "skipped"
+    assert result.message == "client setup disabled"
+    assert not config_path.exists()
+
+
+def test_merge_json_config_rejects_non_object_existing(tmp_path: Path) -> None:
+    config_path = tmp_path / "mcp.json"
+    config_path.write_text("[1, 2, 3]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not a JSON object"):
+        merge_json_config(config_path, {"mcpServers": {}})
+
+
+def test_merge_json_config_rejects_non_object_field(tmp_path: Path) -> None:
+    config_path = tmp_path / "mcp.json"
+    config_path.write_text(json.dumps({"mcpServers": "oops"}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not an object"):
+        merge_json_config(config_path, {"mcpServers": {"skillroute": {}}})
+
+
+def test_merge_json_config_sets_scalar_values_without_backup(tmp_path: Path) -> None:
+    config_path = tmp_path / "mcp.json"
+
+    backup = merge_json_config(config_path, {"schemaVersion": 2})
+
+    assert backup is None
+    assert json.loads(config_path.read_text(encoding="utf-8"))["schemaVersion"] == 2
+
+
+def test_run_detect_command_json_lists_all_clients(capsys: pytest.CaptureFixture[str]) -> None:
+    run_detect_command(Namespace(as_json=True))
+
+    payload = json.loads(capsys.readouterr().out)
+    assert {entry["id"] for entry in payload} == {
+        "ibm-bob",
+        "codex",
+        "claude-code",
+        "claude-desktop",
+        "vscode",
+        "windsurf",
+        "cursor",
+    }
+
+
+def test_client_setup_module_main_detect_json(capsys: pytest.CaptureFixture[str]) -> None:
+    client_setup.main(["detect", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert any(entry["id"] == "ibm-bob" for entry in payload)
+
+
+def test_run_setup_command_applies_all_clients_in_disabled_mode(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_setup_command(
+        Namespace(
+            repo_root=tmp_path / "repo",
+            catalog=tmp_path / "catalog.db",
+            backend=None,
+            clients="all",
+            mode="0",
+            yes=False,
+        )
+    )
+
+    output = capsys.readouterr().out
+    assert "Detected agent clients:" in output
+    assert "skipped - client setup disabled" in output

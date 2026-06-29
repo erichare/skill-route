@@ -39,6 +39,9 @@ jobs:
       - name: Run lint
         run: uv run --frozen --extra dev ruff check .
 
+      - name: Run type check
+        run: uv run --frozen --extra dev mypy
+
       - name: Run example golden routes
         run: uv run --frozen --extra dev skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
 

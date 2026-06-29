@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "httpx>=0.27.0",
+    "mypy>=1.11.0",
     "pytest>=8.0.0",
     "ruff>=0.5.0",
 ]
@@ -34,6 +35,9 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["skillroute"]
@@ -45,6 +49,10 @@ show_missing = true
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.mypy]
+files = ["src/skillroute"]
+python_version = "3.11"
 
 [dependency-groups]
 dev = [
