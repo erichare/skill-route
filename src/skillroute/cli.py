@@ -19,12 +19,16 @@ from skillroute.backends import (
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
-from skillroute.metadata import default_overlay_path, review_metadata_overlay, write_metadata_overlay
 from skillroute.mcp_setup import (
     CLAUDE_SCOPE_CHOICES,
     MCP_CLIENT_CHOICES,
     build_mcp_setup,
     render_mcp_setup,
+)
+from skillroute.metadata import (
+    default_overlay_path,
+    review_metadata_overlay,
+    write_metadata_overlay,
 )
 from skillroute.models import to_jsonable
 from skillroute.routing import Router

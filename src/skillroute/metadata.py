@@ -9,7 +9,6 @@ from typing import Any
 from skillroute.models import RELATIONSHIP_TYPES, SkillRecord
 from skillroute.parser import discover_skill_files, parse_skill_bundle
 
-
 OVERLAY_VERSION = 1
 REVIEW_STATUSES = {"suggested", "reviewed", "rejected"}
 

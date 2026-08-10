@@ -8,7 +8,12 @@ import webbrowser
 from pathlib import Path
 from typing import Any
 
-from skillroute.atlas import build_atlas_payload, catalog_summary, route_preview_payload, skill_detail_payload
+from skillroute.atlas import (
+    build_atlas_payload,
+    catalog_summary,
+    route_preview_payload,
+    skill_detail_payload,
+)
 from skillroute.backends import backend_from_name
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.routing import Router

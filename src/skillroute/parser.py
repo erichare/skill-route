@@ -15,7 +15,6 @@ from skillroute.models import (
 )
 from skillroute.text import top_terms
 
-
 FRONTMATTER_RE = re.compile(r"\A---\s*\n(?P<body>.*?)\n---\s*\n", re.DOTALL)
 HEADING_RE = re.compile(r"^(#{1,4})\s+(?P<title>.+?)\s*$", re.MULTILINE)
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((?P<target>[^)]+)\)")
@@ -302,7 +301,7 @@ def compute_bundle_hash(skill_file: Path, references: list[SkillReference]) -> s
 
 def make_skill_id(skill_file: Path, content_hash: str) -> str:
     canonical = str(skill_file.resolve())
-    digest = hashlib.sha256(f"{canonical}\0{content_hash}".encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(f"{canonical}\0{content_hash}".encode()).hexdigest()[:16]
     slug = re.sub(r"[^a-z0-9]+", "-", skill_file.parent.name.lower()).strip("-")
     return f"{slug}-{digest}"
 
@@ -315,7 +314,7 @@ def infer_metadata(
     overlay: dict[str, Any],
 ) -> tuple[list[str], dict[str, list[str]]]:
     explicit_tags = as_list(metadata.get("tags")) + as_list(overlay.get("tags"))
-    text = " ".join([name, description, body])
+    text = f"{name} {description} {body}"
     inferred = top_terms([name, description, body], limit=16)
 
     domains = sorted({DOMAIN_KEYWORDS[token] for token in inferred if token in DOMAIN_KEYWORDS})

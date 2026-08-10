@@ -9,7 +9,6 @@ from skillroute.catalog import Catalog
 from skillroute.models import SkillRecord, SkillRelationship, to_jsonable
 from skillroute.routing import Router
 
-
 DOMAIN_COLORS = {
     "agentic": "#60a5fa",
     "api": "#22d3ee",

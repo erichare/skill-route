@@ -17,7 +17,12 @@ export default tseslint.config(
       "react-hooks": reactHooks
     },
     rules: {
-      ...reactHooks.configs.recommended.rules
+      ...reactHooks.configs.recommended.rules,
+      // set-state-in-effect exists only in react-hooks >= 7; it flags the intentional
+      // fetch-in-effect pattern in App/SkillDetail. Revisit if a fetching library lands.
+      ...("set-state-in-effect" in reactHooks.rules
+        ? { "react-hooks/set-state-in-effect": "off" }
+        : {})
     }
   },
   {

@@ -6,7 +6,6 @@ from pathlib import Path
 from skillroute.catalog import Catalog
 from skillroute.parser import discover_skill_files
 
-
 DEFAULT_SKILL_ROOTS = (
     ".codex/skills",
     ".agents/skills",

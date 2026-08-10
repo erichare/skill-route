@@ -4,7 +4,6 @@ import re
 from collections import Counter
 from collections.abc import Iterable
 
-
 TOKEN_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9_+-]{1,}")
 
 STOP_WORDS = {

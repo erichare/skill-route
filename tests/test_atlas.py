@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from skillroute.atlas import build_atlas_payload, primary_domain, route_preview_payload, skill_detail_payload
+from skillroute.atlas import (
+    build_atlas_payload,
+    primary_domain,
+    route_preview_payload,
+    skill_detail_payload,
+)
 from skillroute.catalog import Catalog
 from skillroute.ui_server import create_app, run_ui
 

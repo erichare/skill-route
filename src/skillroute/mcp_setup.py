@@ -9,7 +9,6 @@ from typing import Any
 
 from skillroute.catalog import default_catalog_path
 
-
 MCP_CLIENT_CHOICES = (
     "ibm-bob",
     "codex",

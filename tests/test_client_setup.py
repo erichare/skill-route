@@ -9,9 +9,9 @@ import pytest
 
 from skillroute import client_setup
 from skillroute.client_setup import (
+    NO_TTY_SETUP_MESSAGE,
     ClientDetection,
     ClientEnvironment,
-    NO_TTY_SETUP_MESSAGE,
     apply_client_setup,
     detect_clients,
     merge_json_config,

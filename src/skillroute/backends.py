@@ -12,7 +12,6 @@ from typing import Any, Protocol
 from skillroute.models import SkillRecord
 from skillroute.text import keyword_score, unique_tokens
 
-
 BACKEND_CHOICES = ("local", "local-token", "astra", "astra-data-api")
 
 
@@ -87,7 +86,7 @@ class AstraDataAPIBackend:
     name: str = "astra-data-api"
 
     @classmethod
-    def from_env(cls) -> "AstraDataAPIBackend":
+    def from_env(cls) -> AstraDataAPIBackend:
         return cls(
             endpoint=os.environ.get("ASTRA_DB_API_ENDPOINT"),
             token=os.environ.get("ASTRA_DB_APPLICATION_TOKEN"),

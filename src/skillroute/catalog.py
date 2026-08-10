@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from skillroute.backends import LocalTokenBackend
 from skillroute.models import (
     RouteResponse,
     SkillExcerpt,
@@ -17,10 +18,8 @@ from skillroute.models import (
     SkillRelationship,
     to_jsonable,
 )
-from skillroute.backends import LocalTokenBackend
 from skillroute.overlays import load_overlays, overlay_for_skill
-from skillroute.parser import discover_skill_files, parse_skill_bundle, parse_frontmatter
-
+from skillroute.parser import discover_skill_files, parse_frontmatter, parse_skill_bundle
 
 SCHEMA_VERSION = 1
 MAX_ROUTE_TRACES = 1000

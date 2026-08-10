@@ -146,9 +146,7 @@ class Router:
             return True
         if candidates[0].confidence < 0.18:
             return True
-        if len(candidates) > 1 and abs(candidates[0].confidence - candidates[1].confidence) < 0.025:
-            return True
-        return False
+        return len(candidates) > 1 and abs(candidates[0].confidence - candidates[1].confidence) < 0.025
 
     def _clarification_questions(
         self,

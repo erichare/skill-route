@@ -13,7 +13,6 @@ from typing import Any
 from skillroute.catalog import default_catalog_path
 from skillroute.mcp_setup import MCP_CLIENT_CHOICES, build_mcp_setup
 
-
 CLIENT_ORDER = (
     "ibm-bob",
     "codex",
@@ -267,7 +266,7 @@ def merge_json_config(path: Path, incoming: dict[str, Any]) -> Path | None:
         existing = json.loads(path.read_text(encoding="utf-8") or "{}")
         if not isinstance(existing, dict):
             raise ValueError(f"Existing config is not a JSON object: {path}")
-        timestamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = dt.datetime.now(dt.UTC).strftime("%Y%m%d%H%M%S")
         backup_path = path.with_name(f"{path.name}.bak-{timestamp}")
         shutil.copy2(path, backup_path)
 
@@ -275,7 +274,8 @@ def merge_json_config(path: Path, incoming: dict[str, Any]) -> Path | None:
         if isinstance(value, dict):
             target = existing.setdefault(key, {})
             if not isinstance(target, dict):
-                raise ValueError(f"Existing config field is not an object: {key}")
+                # ValueError, not TypeError: this is malformed on-disk data, not a caller bug
+                raise ValueError(f"Existing config field is not an object: {key}")  # noqa: TRY004
             target.update(value)
         else:
             existing[key] = value
@@ -287,7 +287,7 @@ def merge_json_config(path: Path, incoming: dict[str, Any]) -> Path | None:
 
 def confirm(prompt: str) -> bool:
     try:
-        tty = open("/dev/tty", "r+", encoding="utf-8")
+        tty = open("/dev/tty", "r+", encoding="utf-8")  # noqa: SIM115 -- closed by `with tty:` below
     except OSError as exc:
         raise SystemExit("No terminal is available for prompts. Re-run with --yes or SKILLROUTE_CLIENT_SETUP=1.") from exc
     with tty:
