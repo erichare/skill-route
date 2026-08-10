@@ -124,6 +124,14 @@ jobs:
         working-directory: mcp
         run: npm run typecheck
 
+      - name: Test MCP server
+        working-directory: mcp
+        run: npm test
+
+      - name: Verify MCP package contents
+        working-directory: mcp
+        run: npm pack --dry-run
+
       - name: Audit MCP dependencies
         working-directory: mcp
         run: npm audit --audit-level=high
@@ -131,3 +139,34 @@ jobs:
       - name: Smoke test MCP tools
         working-directory: mcp
         run: npm run smoke
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          cache-suffix: package
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
+
+      - name: Verify wheel bundles the web UI
+        run: unzip -l dist/*.whl | grep -q "skillroute/_web/index.html"
