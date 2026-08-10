@@ -122,4 +122,5 @@ def test_ui_command_reports_missing_web_build(tmp_path: Path, monkeypatch: pytes
     with pytest.raises(SystemExit) as exc_info:
         run_ui(catalog_path=tmp_path / "catalog.db", open_browser=False)
 
-    assert "npm --prefix web install && npm --prefix web run build" in str(exc_info.value)
+    assert "npm --prefix web ci && npm --prefix web run build" in str(exc_info.value)
+    assert "SKILLROUTE_WEB_DIST" in str(exc_info.value)

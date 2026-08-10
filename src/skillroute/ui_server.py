@@ -8,6 +8,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any
 
+import skillroute
 from skillroute.atlas import (
     build_atlas_payload,
     catalog_summary,
@@ -41,7 +42,7 @@ class RoutePreviewRequest(BaseModel):
 def create_app(catalog_path: Path | str | None = None, web_dist: Path | None = None) -> FastAPI:
     catalog = Catalog(catalog_path or default_catalog_path())
     dist = web_dist or default_web_dist()
-    app = FastAPI(title="SkillRoute UI", version="0.1.0")
+    app = FastAPI(title="SkillRoute UI", version=skillroute.__version__)
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
@@ -114,7 +115,9 @@ def run_ui(
     dist = default_web_dist()
     if not (dist / "index.html").exists():
         raise SystemExit(
-            "SkillRoute UI build not found. Run `npm --prefix web install && npm --prefix web run build`."
+            "SkillRoute UI assets not found. In a source checkout run "
+            "`npm --prefix web ci && npm --prefix web run build`, or set "
+            "SKILLROUTE_WEB_DIST to a built UI directory."
         )
     app = create_app(catalog_path=catalog_path, web_dist=dist)
     if open_browser:
@@ -148,4 +151,19 @@ def default_web_dist() -> Path:
     override = os.environ.get("SKILLROUTE_WEB_DIST")
     if override:
         return Path(override).expanduser().resolve()
+    packaged = _packaged_web_dist()
+    if packaged is not None:
+        return packaged
+    return _repo_web_dist()
+
+
+def _packaged_web_dist() -> Path | None:
+    """Web assets bundled into the wheel by the hatch build hook (see hatch_build.py)."""
+    candidate = Path(__file__).resolve().parent / "_web"
+    if (candidate / "index.html").exists():
+        return candidate
+    return None
+
+
+def _repo_web_dist() -> Path:
     return Path(__file__).resolve().parents[2] / "web" / "dist"
