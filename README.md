@@ -1,123 +1,180 @@
-# SkillRoute
+<div align="center">
 
-Local-first skill routing for agent builders.
+# 🧭 SkillRoute
 
-SkillRoute indexes full `SKILL.md` bundles, stores reviewed metadata in SQLite,
-and returns ranked skill plans with confidence, evidence, score breakdowns, and
-clarification prompts when the route is uncertain.
+### Local-first skill routing for agent builders
 
-![CI](https://github.com/erichare/skill-route/actions/workflows/ci.yml/badge.svg)
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+Index full `SKILL.md` bundles into a local catalog, route any request to ranked
+skills with confidence and evidence, and serve it all to your agents over MCP.
+
+[![CI](https://img.shields.io/github/actions/workflow/status/erichare/skill-route/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/erichare/skill-route/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
+[![MCP](https://img.shields.io/badge/MCP-stdio%20server-8A2BE2?style=flat-square)](docs/mcp-server.md)
+
+[Quick start](#quick-start) · [Skill Atlas](#skill-atlas) · [Agent setup](#plug-it-into-your-agent) · [How it works](#how-it-works) · [Docs](#docs)
+
+<br>
+
+<img src="docs/assets/screenshot-skill-atlas.png" alt="Skill Atlas mapping 712 skills as an interactive galaxy, with facet filters, relationship types, and a live route preview" width="90%">
+
+<sub><b>Skill Atlas</b> — every skill in your library on one interactive map, with live route previews.</sub>
+
+</div>
+
+---
 
 ## Why
 
-Most agents pick skills from a tiny description. SkillRoute gives them a real
-catalog: parsed skill bundles, facets, graph relationships, backend retrieval,
-golden-route evals, and inspectable routing traces.
+Most agents choose skills from a one-line description and hope for the best.
+SkillRoute treats your skill library like a real corpus:
 
-## Quick Start
+- **Full-bundle indexing** — parses complete `SKILL.md` bundles (headings,
+  triggers, templates, relationships), not just frontmatter.
+- **Explainable routes** — every ranked skill carries confidence, reasons, and
+  source evidence. Uncertain routes return clarification questions instead of
+  guesses.
+- **Local first** — one SQLite file, no services to run. Add the Astra DB
+  backend when you outgrow it.
 
-One-line SkillRoute installer:
+## Quick start
+
+One guided line (confirms each step, sets up detected agent clients with
+backups):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
 ```
 
-It confirms each step, installs SkillRoute into `~/.skillroute/skill-route` by
-default, bootstraps the MCP server, detects supported agent clients, and offers
-to set up each detected client with backups for edited JSON config files.
-
-Already in a checkout:
-
-```bash
-./scripts/bootstrap.sh
-uv run skillroute route "Build an MCP server that exposes routing tools"
-uv run skillroute ui
-```
-
-Manual setup is still just a few commands:
+Or hands-on, in a checkout:
 
 ```bash
 uv run skillroute index --root examples/skills
 uv run skillroute route "Build an MCP server that exposes routing tools"
-uv run skillroute inspect mcp-server-patterns
 ```
 
-The default catalog is `.skillroute/catalog.db`. Use `--catalog <path>` or
-`SKILLROUTE_CATALOG_PATH` when you want an explicit catalog.
+![Ranked route output with confidence, reasons, and evidence](docs/assets/screenshot-route.svg)
 
-## Screenshots
+<details>
+<summary>Actual text output</summary>
 
-Skill Atlas, the local graph UI for exploring skills, relationships, and route
-previews:
+```text
+Ranked skills:
+1. mcp-server-patterns (mcp-server-patterns-99fdd0b3d944c32a) confidence=0.3563
+   Build MCP servers with Node and TypeScript using tools, resources, Zod schemas, and stdio transport.
+   reason: Matched request terms against skill name, description, tags, or excerpts.
+   reason: local-token retrieval returned this skill as a candidate.
+   reason: Skill graph relationships provide supporting context.
+   evidence[description]: Build MCP servers with Node and TypeScript using tools, resources, Zod schemas, and stdio transport.
+   evidence[headings]: MCP Server Patterns; When to Use
+2. python-testing (python-testing-19ef6ae9ced445b2) confidence=0.1373
+   Test Python applications with pytest fixtures, parametrization, temporary paths, and regression coverage.
+   ...
+```
 
-![SkillRoute Skill Atlas](docs/assets/screenshot-skill-atlas.png)
+</details>
 
-CLI route output:
+The default catalog lives at `.skillroute/catalog.db`; point elsewhere with
+`--catalog <path>` or `SKILLROUTE_CATALOG_PATH`.
 
-![SkillRoute route output](docs/assets/screenshot-route.svg)
+## Skill Atlas
 
-Trace inspection:
-
-![SkillRoute trace inspection](docs/assets/screenshot-traces.svg)
-
-## What You Get
-
-- Hybrid routing over lexical metadata, local/remote retrieval, repo context,
-  and skill graph signals.
-- Local SQLite catalog with skills, excerpts, relationships, backend refs,
-  and route traces.
-- Optional Astra DB Data API retrieval backend.
-- TypeScript MCP server exposing `skillroute.route`, `skillroute.search`, and
-  `skillroute.inspect_skill`.
-- CLI tools for indexing, routing, search, metadata review, backend status,
-  trace inspection, and golden-route evals.
-- Skill Atlas web UI for exploring the local skill graph, facets, relationships,
-  route previews, and source evidence.
-
-## Docs
-
-- [Getting Started](docs/getting-started.md)
-- [Agent Setup](docs/agent-setup.md)
-- [Astra Data API Backend](docs/astra-backend.md)
-- [Metadata Overlays](docs/metadata-overlays.md)
-- [Route Observability](docs/route-observability.md)
-- [Skill Atlas UI](docs/skill-atlas.md)
-- [MCP Server](docs/mcp-server.md)
-- [Golden Route Evals](docs/evals.md)
-- [Changelog](CHANGELOG.md)
-
-## Core Commands
+Your whole library, mapped. Facet nebula, skill graph, and matrix views;
+filters for domains, relationship types, orphans, and conflicts; a detail panel
+with excerpts and source references; and a route preview bar that highlights
+the chosen path through the graph.
 
 ```bash
-uv run skillroute mcp config --client ibm-bob
-uv run skillroute mcp config --client codex
-uv run skillroute mcp config --client claude-code
-uv run skillroute mcp config --client claude-desktop
-uv run skillroute mcp config --client vscode
-uv run skillroute mcp config --client windsurf
-uv run skillroute mcp config --client cursor
-uv run skillroute search "Astra vector backend"
-uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
-uv run skillroute backend status --backend astra
-uv run skillroute traces list
 uv run skillroute ui
 ```
 
-## Current Shape
+## Plug it into your agent
 
-- Python core: parsing, catalog persistence, routing, adapters, evals, and CLI.
-- Skill Atlas UI: local FastAPI server plus React Flow/Vite frontend.
-- TypeScript MCP: local stdio transport around the Python bridge.
-- Retrieval adapters: local token backend by default, with Astra DB Data API and
-  LangChain-compatible adapter contracts.
+The bundled MCP server exposes three tools over stdio — `skillroute.route`,
+`skillroute.search`, and `skillroute.inspect_skill`. One command writes the
+config for your client (JSON edits are backed up first):
+
+```bash
+uv run skillroute mcp config --client claude-code
+```
+
+Supported clients: `claude-code` · `claude-desktop` · `codex` · `cursor` ·
+`ibm-bob` · `vscode` · `windsurf`
+
+## Route observability
+
+Every route is a trace you can replay: inputs, candidates, scores, and the
+evidence behind each decision. Golden-route evals keep your catalog honest as
+it grows.
+
+![Backend status and route trace inspection](docs/assets/screenshot-traces.svg)
+
+```bash
+uv run skillroute traces list
+uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
+```
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["SKILL.md bundles"] --> B["Indexer<br/>parser + metadata review"]
+    B --> C[("SQLite catalog<br/>skills · excerpts · graph · traces")]
+    C --> D["Router<br/>lexical + retrieval + graph signals"]
+    D --> E["CLI"]
+    D --> F["Skill Atlas UI"]
+    D --> G["MCP server"]
+    G --> H["Your agent"]
+```
+
+- **Python core** — parsing, catalog persistence, hybrid routing, evals, CLI.
+- **Skill Atlas** — FastAPI server + React Flow frontend, bundled into the
+  Python wheel.
+- **MCP server** — TypeScript stdio transport around the Python bridge.
+- **Backends** — local token retrieval by default; Astra DB Data API and a
+  LangChain-compatible adapter when you want more.
+
+## CLI at a glance
+
+| Command | What it does |
+| --- | --- |
+| `skillroute index --root <dir>` | Parse and index `SKILL.md` bundles |
+| `skillroute route "<request>"` | Ranked skills with confidence and evidence |
+| `skillroute search "<query>"` | Hybrid search across the catalog |
+| `skillroute inspect <skill>` | Metadata, relationships, excerpts, sources |
+| `skillroute traces list` | Inspect past routing decisions |
+| `skillroute eval run` | Golden-route evals against expected outcomes |
+| `skillroute backend status` | Retrieval backend health |
+| `skillroute mcp config --client <client>` | Configure your agent client |
+| `skillroute ui` | Launch the Skill Atlas |
+
+## Docs
+
+| Guide | |
+| --- | --- |
+| [Getting Started](docs/getting-started.md) | Index, route, and inspect in five minutes |
+| [Agent Setup](docs/agent-setup.md) | Wire SkillRoute into your agent clients |
+| [MCP Server](docs/mcp-server.md) | Tools, transport, and configuration |
+| [Skill Atlas UI](docs/skill-atlas.md) | The graph explorer in depth |
+| [Route Observability](docs/route-observability.md) | Traces and debugging routes |
+| [Golden Route Evals](docs/evals.md) | Keep routing quality measurable |
+| [Metadata Overlays](docs/metadata-overlays.md) | Curate tags without editing sources |
+| [Astra Data API Backend](docs/astra-backend.md) | Remote vector retrieval |
+| [Changelog](CHANGELOG.md) | Release history |
 
 ## Development
 
 ```bash
-uv run --extra dev pytest --cov=skillroute --cov-report=term-missing
-uv run --extra dev ruff check .
-npm --prefix web ci && npm --prefix web run typecheck && npm --prefix web run lint && npm --prefix web run test && npm --prefix web run build
-cd mcp && npm ci && npm run build && npm run typecheck && npm run smoke
+uv sync --extra dev
+uv run --extra dev pytest --cov=skillroute
+uv run --extra dev ruff check . && uv run --extra dev mypy
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup (web UI, MCP
+server) and the release process.
+
+---
+
+<div align="center">
+<sub>MIT © <a href="https://github.com/erichare">Eric Hare</a> — for people who take their skill libraries seriously.</sub>
+</div>
