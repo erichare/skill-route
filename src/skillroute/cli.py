@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+import skillroute
 from skillroute.backends import (
     BACKEND_CHOICES,
     AstraDataAPIBackend,
@@ -48,6 +49,7 @@ def main(argv: list[str] | None = None) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="skillroute")
+    parser.add_argument("--version", action="version", version=f"skillroute {skillroute.__version__}")
     parser.add_argument("--catalog", type=Path, default=None, help="Path to the SQLite catalog")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

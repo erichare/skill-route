@@ -1,27 +1,78 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
-const repoRoot = process.env.SKILLROUTE_REPO_ROOT
-  ? path.resolve(process.env.SKILLROUTE_REPO_ROOT)
-  : path.resolve(currentDir, "../..");
-const pythonPath = process.env.SKILLROUTE_PYTHON ?? "python3";
-const timeoutMs = Number.parseInt(process.env.SKILLROUTE_BRIDGE_TIMEOUT_MS ?? "30000", 10);
 
 export type BridgeOperation = "route" | "search" | "inspect";
 
-export async function callBridge(operation: BridgeOperation, payload: unknown): Promise<unknown> {
-  const env = {
-    ...process.env,
-    PYTHONPATH: process.env.PYTHONPATH
-      ? `${path.join(repoRoot, "src")}${path.delimiter}${process.env.PYTHONPATH}`
-      : path.join(repoRoot, "src")
-  };
+export interface BridgeCommand {
+  command: string;
+  args: string[];
+  cwd: string | undefined;
+  env: NodeJS.ProcessEnv;
+}
 
-  const child = spawn(pythonPath, ["-m", "skillroute", "bridge", operation], {
-    cwd: repoRoot,
+/**
+ * Decide how to invoke the SkillRoute Python bridge.
+ *
+ * In a repo checkout (or with SKILLROUTE_REPO_ROOT set) the bridge runs
+ * `python -m skillroute` against the checkout's src tree. Outside a checkout
+ * (npx / global install) it runs the `skillroute` console script from a
+ * `pip install skillroute`, or `$SKILLROUTE_PYTHON -m skillroute` when set.
+ */
+export function resolveBridgeCommand(
+  operation: BridgeOperation,
+  options: { moduleDir?: string } = {}
+): BridgeCommand {
+  const bridgeArgs = ["bridge", operation];
+  const repoRoot = resolveRepoRoot(options.moduleDir ?? currentDir);
+  if (repoRoot) {
+    const srcPath = path.join(repoRoot, "src");
+    return {
+      command: process.env.SKILLROUTE_PYTHON ?? "python3",
+      args: ["-m", "skillroute", ...bridgeArgs],
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        PYTHONPATH: process.env.PYTHONPATH
+          ? `${srcPath}${path.delimiter}${process.env.PYTHONPATH}`
+          : srcPath
+      }
+    };
+  }
+  if (process.env.SKILLROUTE_PYTHON) {
+    return {
+      command: process.env.SKILLROUTE_PYTHON,
+      args: ["-m", "skillroute", ...bridgeArgs],
+      cwd: undefined,
+      env: { ...process.env }
+    };
+  }
+  return { command: "skillroute", args: bridgeArgs, cwd: undefined, env: { ...process.env } };
+}
+
+function resolveRepoRoot(moduleDir: string): string | undefined {
+  const override = process.env.SKILLROUTE_REPO_ROOT;
+  if (override) {
+    return path.resolve(override);
+  }
+  const candidate = path.resolve(moduleDir, "../..");
+  return existsSync(path.join(candidate, "src", "skillroute")) ? candidate : undefined;
+}
+
+function bridgeTimeoutMs(): number {
+  return Number.parseInt(process.env.SKILLROUTE_BRIDGE_TIMEOUT_MS ?? "30000", 10);
+}
+
+export async function callBridge(operation: BridgeOperation, payload: unknown): Promise<unknown> {
+  const { command, args, cwd, env } = resolveBridgeCommand(operation);
+  const timeoutMs = bridgeTimeoutMs();
+
+  const child = spawn(command, args, {
+    cwd,
     env,
     stdio: ["pipe", "pipe", "pipe"]
   });
@@ -53,7 +104,19 @@ export async function callBridge(operation: BridgeOperation, payload: unknown): 
 
   try {
     const exitCode = await new Promise<number | null>((resolve, reject) => {
-      child.on("error", reject);
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") {
+          reject(
+            new Error(
+              `SkillRoute bridge command not found: ${command}. Install the Python ` +
+                "package (`pip install skillroute`) or point SKILLROUTE_PYTHON or " +
+                "SKILLROUTE_REPO_ROOT at a working SkillRoute environment."
+            )
+          );
+          return;
+        }
+        reject(error);
+      });
       child.on("close", resolve);
     });
 

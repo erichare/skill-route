@@ -18,3 +18,8 @@ mcp/node_modules/
 web/dist/
 web/node_modules/
 node_modules/
+
+dist/
+.mypy_cache/
+htmlcov/
+coverage.xml

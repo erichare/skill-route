@@ -4,6 +4,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import skillroute
+from skillroute import ui_server
 from skillroute.catalog import Catalog
 from skillroute.routing import Router
 from skillroute.ui_server import backend_from_name, create_app, default_web_dist
@@ -76,3 +78,36 @@ def test_backend_from_name_defaults_to_local() -> None:
 def test_default_web_dist_env_override(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("SKILLROUTE_WEB_DIST", str(tmp_path))
     assert default_web_dist() == tmp_path.resolve()
+
+
+def test_default_web_dist_prefers_packaged_assets(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("SKILLROUTE_WEB_DIST", raising=False)
+    packaged = tmp_path / "_web"
+    packaged.mkdir()
+    (packaged / "index.html").write_text("<!doctype html>", encoding="utf-8")
+    monkeypatch.setattr(ui_server, "_packaged_web_dist", lambda: packaged)
+    assert default_web_dist() == packaged
+
+
+def test_default_web_dist_env_override_beats_packaged(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SKILLROUTE_WEB_DIST", str(tmp_path / "override"))
+    monkeypatch.setattr(ui_server, "_packaged_web_dist", lambda: tmp_path / "_web")
+    assert default_web_dist() == (tmp_path / "override").resolve()
+
+
+def test_default_web_dist_falls_back_to_repo_checkout(monkeypatch) -> None:
+    monkeypatch.delenv("SKILLROUTE_WEB_DIST", raising=False)
+    monkeypatch.setattr(ui_server, "_packaged_web_dist", lambda: None)
+    dist = default_web_dist()
+    assert dist.parts[-2:] == ("web", "dist")
+
+
+def test_packaged_web_dist_absent_in_checkout() -> None:
+    assert ui_server._packaged_web_dist() is None
+
+
+def test_app_version_matches_package(indexed_catalog: Catalog, tmp_path: Path) -> None:
+    app = create_app(catalog_path=indexed_catalog.path, web_dist=tmp_path / "empty-dist")
+    assert app.version == skillroute.__version__
+    assert skillroute.__version__
+    assert skillroute.__version__ != "0.0.0.dev0"

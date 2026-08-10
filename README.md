@@ -7,6 +7,8 @@ and returns ranked skill plans with confidence, evidence, score breakdowns, and
 clarification prompts when the route is uncertain.
 
 ![CI](https://github.com/erichare/skill-route/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 
 ## Why
 
@@ -84,7 +86,7 @@ Trace inspection:
 - [Skill Atlas UI](docs/skill-atlas.md)
 - [MCP Server](docs/mcp-server.md)
 - [Golden Route Evals](docs/evals.md)
-- [Roadmap](docs/roadmap.md)
+- [Changelog](CHANGELOG.md)
 
 ## Core Commands
 
@@ -92,6 +94,7 @@ Trace inspection:
 uv run skillroute mcp config --client ibm-bob
 uv run skillroute mcp config --client codex
 uv run skillroute mcp config --client claude-code
+uv run skillroute mcp config --client claude-desktop
 uv run skillroute mcp config --client vscode
 uv run skillroute mcp config --client windsurf
 uv run skillroute mcp config --client cursor
