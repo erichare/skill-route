@@ -2,6 +2,24 @@
   "name": "@skillroute/mcp-server",
   "version": "0.1.0",
   "description": "SkillRoute MCP stdio server",
+  "license": "MIT",
+  "author": "Eric Hare",
+  "homepage": "https://github.com/erichare/skill-route#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erichare/skill-route.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/erichare/skill-route/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agents",
+    "skills",
+    "routing"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -9,9 +27,17 @@
   "bin": {
     "skillroute-mcp": "build/index.js"
   },
+  "files": [
+    "build"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "smoke": "node tests/mcp-smoke.mjs",
+    "test": "node --test 'tests/*.test.mjs'",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
