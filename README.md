@@ -131,8 +131,9 @@ flowchart LR
 - **Skill Atlas** — FastAPI server + React Flow frontend, bundled into the
   Python wheel.
 - **MCP server** — TypeScript stdio transport around the Python bridge.
-- **Backends** — local token retrieval by default; Astra DB Data API and a
-  LangChain-compatible adapter when you want more.
+- **Backends** — local token retrieval by default; SQLite FTS5 (BM25) for
+  larger local libraries, Astra DB Data API and a LangChain-compatible adapter
+  when you want more.
 
 ## CLI at a glance
 

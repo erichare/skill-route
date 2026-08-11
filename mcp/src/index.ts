@@ -17,7 +17,7 @@ const server = new McpServer({
 });
 
 const backendSchema = z
-  .enum(["local", "astra"])
+  .enum(["local", "fts5", "astra"])
   .optional()
   .describe("Optional retrieval backend. Defaults to SKILLROUTE_BACKEND or local.");
 

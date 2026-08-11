@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import functools
 import json
 import os
+import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,7 +14,7 @@ from typing import Any, Protocol
 from skillroute.models import SkillRecord
 from skillroute.text import keyword_score, unique_tokens
 
-BACKEND_CHOICES = ("local", "local-token", "astra", "astra-data-api")
+BACKEND_CHOICES = ("local", "local-token", "fts5", "sqlite-fts5", "astra", "astra-data-api")
 
 
 class RetrievalBackend(Protocol):
@@ -70,6 +72,154 @@ class LocalTokenBackend:
             "write_available": True,
             "mode": "local",
         }
+
+
+def _probe_fts5() -> bool:
+    try:
+        connection = sqlite3.connect(":memory:")
+    except sqlite3.Error:
+        return False
+    try:
+        connection.execute("CREATE VIRTUAL TABLE skillroute_fts_probe USING fts5(content)")
+    except sqlite3.Error:
+        return False
+    finally:
+        connection.close()
+    return True
+
+
+@functools.lru_cache(maxsize=1)
+def fts5_available() -> bool:
+    """True when this SQLite build ships the FTS5 extension (standard builds do)."""
+    return _probe_fts5()
+
+
+def build_fts_match_query(query: str) -> str | None:
+    """Turn an arbitrary query string into a safe FTS5 MATCH expression.
+
+    Every whitespace-separated term is wrapped in double quotes so user input
+    is never interpreted as FTS5 query syntax (AND/OR/NEAR, prefixes, columns).
+    """
+    terms = [term for term in query.split() if term]
+    if not terms:
+        return None
+    return " OR ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms)
+
+
+# Column order must match the CREATE VIRTUAL TABLE statement and the INSERT in
+# SqliteFTS5Backend._index(). The leading 0.0 weight keeps the UNINDEXED
+# skill_id column out of the ranking.
+FTS_BM25_WEIGHTS = (0.0, 2.5, 2.0, 1.5, 1.2, 1.0)
+
+
+@dataclass(slots=True)
+class SqliteFTS5Backend:
+    """Local retrieval backed by SQLite FTS5 BM25 ranking.
+
+    Builds an in-memory FTS5 index from the skills handed to ``search`` so the
+    backend stays stateless and adds no storage beyond the catalog. BM25 adds
+    term-frequency, document-length, and rare-term weighting on top of the
+    plain token-overlap scoring of LocalTokenBackend, and scales to much
+    larger skill libraries. Field weights mirror the lexical scoring weights
+    so name and description matches dominate.
+    """
+
+    name: str = "fts5"
+    # raw BM25 relevance maps to score = raw / (raw + saturation) in [0, 1).
+    bm25_saturation: float = 6.0
+    _index_cache: dict[tuple[Any, ...], sqlite3.Connection] = field(default_factory=dict, repr=False)
+
+    def upsert_skills(self, skills: list[SkillRecord]) -> list[dict[str, Any]]:
+        return [
+            {
+                "skill_id": skill.id,
+                "backend": self.name,
+                "ref": skill.content_hash,
+                "status": "indexed",
+            }
+            for skill in skills
+        ]
+
+    def search(self, query: str, skills: list[SkillRecord], limit: int = 10) -> list[dict[str, Any]]:
+        if not skills:
+            return []
+        match = build_fts_match_query(query)
+        if match is None:
+            return []
+        connection = self._index(skills)
+        weights = ", ".join(str(weight) for weight in FTS_BM25_WEIGHTS)
+        try:
+            rows = connection.execute(
+                f"""
+                SELECT skill_id, bm25(fts, {weights}) AS rank
+                FROM fts
+                WHERE fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (match, max(1, limit)),
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        return [
+            {"skill_id": skill_id, "backend": self.name, "score": self.normalize_bm25(rank)}
+            for skill_id, rank in rows
+        ]
+
+    def status(self, skills: list[SkillRecord] | None = None) -> dict[str, Any]:
+        available = fts5_available()
+        return {
+            "configured": available,
+            "status": "ready" if available else "fts5_unavailable",
+            "search_available": available,
+            "write_available": available,
+            "mode": "local",
+        }
+
+    def normalize_bm25(self, rank: float) -> float:
+        """Map SQLite's negative-is-better BM25 rank into a [0, 1) score."""
+        raw = max(-float(rank), 0.0)
+        return raw / (raw + self.bm25_saturation)
+
+    def _index(self, skills: list[SkillRecord]) -> sqlite3.Connection:
+        fingerprint = tuple((skill.id, skill.content_hash) for skill in skills)
+        cached = self._index_cache.get(fingerprint)
+        if cached is not None:
+            return cached
+        connection = sqlite3.connect(":memory:")
+        connection.execute(
+            """
+            CREATE VIRTUAL TABLE fts USING fts5(
+                skill_id UNINDEXED,
+                name,
+                description,
+                tags,
+                facets,
+                body
+            )
+            """
+        )
+        connection.executemany(
+            "INSERT INTO fts (skill_id, name, description, tags, facets, body) VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    skill.id,
+                    skill.name,
+                    skill.description,
+                    " ".join(skill.tags),
+                    " ".join(value for values in skill.facets.values() for value in values),
+                    "\n".join(excerpt.text for excerpt in skill.excerpts),
+                )
+                for skill in skills
+            ],
+        )
+        # Bounded cache: a long-lived process (UI server) may re-index over
+        # time, so evict and close the oldest index when the cache fills up.
+        while len(self._index_cache) >= 8:
+            evicted_key = next(iter(self._index_cache))
+            self._index_cache.pop(evicted_key).close()
+        self._index_cache[fingerprint] = connection
+        return connection
 
 
 @dataclass(slots=True)
@@ -377,6 +527,13 @@ def backend_from_name(name: str | None) -> RetrievalBackend:
     configured = (name or os.environ.get("SKILLROUTE_BACKEND") or "local").strip().lower()
     if configured in {"local", "local-token"}:
         return LocalTokenBackend()
+    if configured in {"fts5", "sqlite-fts5"}:
+        if not fts5_available():
+            raise ValueError(
+                "The fts5 backend needs SQLite's FTS5 extension, which this sqlite3 build "
+                "does not provide. Use the local-token backend instead."
+            )
+        return SqliteFTS5Backend()
     if configured in {"astra", "astra-data-api"}:
         return AstraDataAPIBackend.from_env()
     valid = ", ".join(BACKEND_CHOICES)
