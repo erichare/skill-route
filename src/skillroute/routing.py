@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +14,69 @@ from skillroute.models import RouteCandidate, RouteResponse, ScoreBreakdown, Ski
 from skillroute.rerankers import Reranker, default_reranker
 from skillroute.text import best_snippets, keyword_score, unique_tokens
 
+DEFAULT_WEIGHTS = {
+    "lexical": 0.5,
+    "semantic": 0.25,
+    "repo_context": 0.15,
+    "graph": 0.10,
+    "confidence_floor": 0.18,
+    "clarification_gap": 0.025,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class RouteWeights:
+    """Blend weights and clarification thresholds for hybrid routing.
+
+    Defaults match the historical hardcoded behavior. Override per-process with
+    the SKILLROUTE_WEIGHTS environment variable (a JSON object whose keys are a
+    subset of the field names), or pass an instance to ``Router`` directly.
+    """
+
+    lexical: float = DEFAULT_WEIGHTS["lexical"]
+    semantic: float = DEFAULT_WEIGHTS["semantic"]
+    repo_context: float = DEFAULT_WEIGHTS["repo_context"]
+    graph: float = DEFAULT_WEIGHTS["graph"]
+    confidence_floor: float = DEFAULT_WEIGHTS["confidence_floor"]
+    clarification_gap: float = DEFAULT_WEIGHTS["clarification_gap"]
+
+    @classmethod
+    def from_overrides(cls, overrides: Mapping[str, Any]) -> RouteWeights:
+        field_names = {field.name for field in fields(cls)}
+        unknown = sorted(set(overrides) - field_names)
+        if unknown:
+            raise ValueError(
+                f"Unknown route weight keys: {', '.join(unknown)}. "
+                f"Valid keys: {', '.join(sorted(field_names))}"
+            )
+        values: dict[str, float] = {}
+        for name in field_names:
+            raw = overrides.get(name, DEFAULT_WEIGHTS[name])
+            try:
+                value = float(raw)  # type: ignore[arg-type]
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Route weight {name} must be a number, got {raw!r}") from exc
+            if value < 0:
+                raise ValueError(f"Route weight {name} must be >= 0, got {value}")
+            values[name] = value
+        return cls(**values)
+
+    @classmethod
+    def from_env(cls) -> RouteWeights:
+        raw = os.environ.get("SKILLROUTE_WEIGHTS")
+        if not raw:
+            return cls()
+        try:
+            overrides = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"SKILLROUTE_WEIGHTS is not valid JSON: {exc}") from exc
+        if not isinstance(overrides, dict):
+            raise TypeError("SKILLROUTE_WEIGHTS must be a JSON object")
+        return cls.from_overrides(overrides)
+
+    def to_json(self) -> dict[str, float]:
+        return {field.name: getattr(self, field.name) for field in fields(self)}
+
 
 class Router:
     def __init__(
@@ -17,10 +84,12 @@ class Router:
         catalog: Catalog,
         backend: RetrievalBackend | None = None,
         reranker: Reranker | None = None,
+        weights: RouteWeights | None = None,
     ) -> None:
         self.catalog = catalog
         self.backend = backend or LocalTokenBackend()
         self.reranker = reranker or default_reranker()
+        self.weights = weights or RouteWeights.from_env()
 
     def route(
         self,
@@ -101,13 +170,19 @@ class Router:
         query_tokens = unique_tokens(query)
         backend_hits = {row["skill_id"]: row for row in self.backend.search(query, skills, limit=limit * 2)}
         candidates: list[RouteCandidate] = []
+        weights = self.weights
         for skill in skills:
             lexical = lexical_score(query_tokens, skill)
             backend_hit = backend_hits.get(skill.id)
             semantic = semantic_score(backend_hit)
             repo_context_score = repo_score(repo_context, skill)
             graph = graph_score(skill)
-            total = (lexical * 0.5) + (semantic * 0.25) + (repo_context_score * 0.15) + (graph * 0.10)
+            total = (
+                (lexical * weights.lexical)
+                + (semantic * weights.semantic)
+                + (repo_context_score * weights.repo_context)
+                + (graph * weights.graph)
+            )
             if total <= 0:
                 continue
             evidence = evidence_for(query_tokens, skill.excerpts)
@@ -144,9 +219,13 @@ class Router:
     def _needs_clarification(self, candidates: list[RouteCandidate]) -> bool:
         if not candidates:
             return True
-        if candidates[0].confidence < 0.18:
+        if candidates[0].confidence < self.weights.confidence_floor:
             return True
-        return len(candidates) > 1 and abs(candidates[0].confidence - candidates[1].confidence) < 0.025
+        return (
+            len(candidates) > 1
+            and abs(candidates[0].confidence - candidates[1].confidence)
+            < self.weights.clarification_gap
+        )
 
     def _clarification_questions(
         self,
