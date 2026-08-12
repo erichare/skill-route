@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+import threading
+
 import pytest
 
 from skillroute.backends import (
@@ -319,17 +322,39 @@ def test_fts5_backend_escapes_query_syntax(indexed_catalog: Catalog) -> None:
     """User input must never be parsed as FTS5 query syntax."""
     skills = indexed_catalog.list_skills()
     backend = SqliteFTS5Backend()
+    mcp_id = indexed_catalog.get_skill("mcp-server-patterns").id
 
-    # AND/OR/NEAR, parens, column filters, and quotes are all legal FTS5
-    # syntax; they must be treated as literal search terms instead.
+    # AND/OR/NOT/NEAR, parens, column filters, prefixes, and quotes are all
+    # legal FTS5 syntax; they must be treated as literal search terms instead.
+    # Each of these still has to find the skill its real words point at --
+    # a query parsed as syntax would error out or filter the hit away, and
+    # search() reports both of those as an empty result.
     for hostile in [
         'mcp AND (server OR "injected")',
         "server:xyz NEAR/2 mcp",
-        'pytest"" OR """"',
-        "vectorize*",
+        "mcp NOT server",
+        "vectorize* mcp",
     ]:
         rows = backend.search(hostile, skills)
+        assert rows, f"{hostile!r} returned no hits -- input was not escaped"
+        assert rows[0]["skill_id"] == mcp_id
         assert all(row["backend"] == "fts5" for row in rows)
+
+    # Embedded quotes are the fragile case: they have to be doubled rather
+    # than closing the phrase early and reopening as syntax.
+    quoted = backend.search('pytest"" OR """"', skills)
+    assert quoted
+    assert quoted[0]["skill_id"] == indexed_catalog.get_skill("python-testing").id
+
+    # Left unescaped these really are hostile, so the assertions above bite:
+    # a column filter is rejected outright, and NOT drops the matching skill.
+    connection = backend._index(skills)
+    with pytest.raises(sqlite3.OperationalError):
+        connection.execute("SELECT skill_id FROM fts WHERE fts MATCH ?", ("server:xyz NEAR/2 mcp",))
+    raw = connection.execute(
+        "SELECT skill_id FROM fts WHERE fts MATCH ?", ("mcp NOT server",)
+    ).fetchall()
+    assert raw == []
 
 
 def test_build_fts_match_query() -> None:
@@ -340,6 +365,50 @@ def test_build_fts_match_query() -> None:
     # Whitespace-separated fragments each become their own quoted term, and
     # embedded double quotes are escaped by doubling.
     assert build_fts_match_query('say "hi"') == '"say" OR """hi"""'
+
+
+@requires_fts5
+def test_fts5_backend_drops_idf_floor_noise(indexed_catalog: Catalog) -> None:
+    """Terms shared by every skill must not pad results with 0.0-score hits."""
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    # "skills" is a tag on every fixture, so FTS5 matches all of them at its
+    # clamped 1e-6 IDF. None of that is relevance, so none of it is a hit.
+    assert backend.search("skills", skills) == []
+
+    # A query mixing a real term with catalog-wide ones keeps only the real
+    # hit, the way LocalTokenBackend reports a single relevant skill rather
+    # than every skill padded out to a 0.0 score.
+    hits = backend.search("write pytest fixtures for my skills", skills)
+    assert [hit["skill_id"] for hit in hits] == [indexed_catalog.get_skill("python-testing").id]
+    assert hits[0]["score"] >= backend.min_score
+
+
+@requires_fts5
+def test_fts5_backend_search_is_usable_from_another_thread(indexed_catalog: Catalog) -> None:
+    """A cached index outlives the thread that built it (UI server request pool)."""
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    expected = backend.search("mcp server tools", skills)
+    assert expected
+
+    results: list[list[dict[str, object]]] = []
+    errors: list[Exception] = []
+
+    def search_in_thread() -> None:
+        try:
+            results.append(backend.search("mcp server tools", skills))
+        except Exception as exc:  # noqa: BLE001 - surfaced on the main thread
+            errors.append(exc)
+
+    worker = threading.Thread(target=search_in_thread)
+    worker.start()
+    worker.join()
+
+    assert not errors, f"cross-thread search raised {errors[0]!r}"
+    assert results == [expected]
 
 
 @requires_fts5

@@ -4,6 +4,7 @@ import functools
 import json
 import os
 import sqlite3
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -111,6 +112,14 @@ def build_fts_match_query(query: str) -> str | None:
 # skill_id column out of the ranking.
 FTS_BM25_WEIGHTS = (0.0, 2.5, 2.0, 1.5, 1.2, 1.0)
 
+# FTS5 clamps a non-discriminating IDF (a term present in every indexed row) to
+# 1e-6 rather than dropping the row, so a query term like "the" -- or a tag the
+# whole catalog shares -- still matches every skill at a raw BM25 magnitude
+# around 1e-6. Those carry no ranking signal, and the router keeps any hit
+# scoring above zero, so without a floor they pad results with 0.0-score
+# skills that LocalTokenBackend correctly omits.
+FTS_MIN_SCORE = 1e-4
+
 
 @dataclass(slots=True)
 class SqliteFTS5Backend:
@@ -127,7 +136,14 @@ class SqliteFTS5Backend:
     name: str = "fts5"
     # raw BM25 relevance maps to score = raw / (raw + saturation) in [0, 1).
     bm25_saturation: float = 6.0
-    _index_cache: dict[tuple[Any, ...], sqlite3.Connection] = field(default_factory=dict, repr=False)
+    # Hits scoring below this are IDF-floor noise rather than relevance.
+    min_score: float = FTS_MIN_SCORE
+    _index_cache: dict[tuple[Any, ...], sqlite3.Connection] = field(
+        default_factory=dict, repr=False, init=False
+    )
+    # Cached connections outlive the thread that built them, so serialize
+    # access: a shared in-memory index may be queried from a request pool.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, init=False)
 
     def upsert_skills(self, skills: list[SkillRecord]) -> list[dict[str, Any]]:
         return [
@@ -146,25 +162,31 @@ class SqliteFTS5Backend:
         match = build_fts_match_query(query)
         if match is None:
             return []
-        connection = self._index(skills)
         weights = ", ".join(str(weight) for weight in FTS_BM25_WEIGHTS)
-        try:
-            rows = connection.execute(
-                f"""
-                SELECT skill_id, bm25(fts, {weights}) AS rank
-                FROM fts
-                WHERE fts MATCH ?
-                ORDER BY rank
-                LIMIT ?
-                """,
-                (match, max(1, limit)),
-            ).fetchall()
-        except sqlite3.Error:
-            return []
-        return [
-            {"skill_id": skill_id, "backend": self.name, "score": self.normalize_bm25(rank)}
-            for skill_id, rank in rows
-        ]
+        with self._lock:
+            connection = self._index(skills)
+            try:
+                rows = connection.execute(
+                    f"""
+                    SELECT skill_id, bm25(fts, {weights}) AS rank
+                    FROM fts
+                    WHERE fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?
+                    """,
+                    (match, max(1, limit)),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                # A MATCH that SQLite refuses (an over-large expression, say)
+                # degrades to "no hits". Anything else is a bug worth raising.
+                return []
+        hits: list[dict[str, Any]] = []
+        for skill_id, rank in rows:
+            score = self.normalize_bm25(rank)
+            if score < self.min_score:
+                continue
+            hits.append({"skill_id": skill_id, "backend": self.name, "score": score})
+        return hits
 
     def status(self, skills: list[SkillRecord] | None = None) -> dict[str, Any]:
         available = fts5_available()
@@ -182,11 +204,15 @@ class SqliteFTS5Backend:
         return raw / (raw + self.bm25_saturation)
 
     def _index(self, skills: list[SkillRecord]) -> sqlite3.Connection:
+        """Build (or reuse) the FTS index for ``skills``. Caller holds ``_lock``."""
         fingerprint = tuple((skill.id, skill.content_hash) for skill in skills)
         cached = self._index_cache.get(fingerprint)
         if cached is not None:
             return cached
-        connection = sqlite3.connect(":memory:")
+        # check_same_thread=False: a cached index is reused by whichever thread
+        # searches next (the UI server answers requests from a pool). _lock,
+        # not the sqlite3 guard, is what keeps that access serialized.
+        connection = sqlite3.connect(":memory:", check_same_thread=False)
         connection.execute(
             """
             CREATE VIRTUAL TABLE fts USING fts5(
