@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from skillroute.backends import AstraDataAPIBackend
+from skillroute.backends import AstraDataAPIBackend, fts5_available
 from skillroute.cli import (
     clamp_limit,
     main,
@@ -709,6 +709,108 @@ def test_cli_traces_list_and_show_text_output(
     show_output = capsys.readouterr().out
     assert "Trace 1" in show_output
     assert "request: Build an MCP server with tools" in show_output
+
+
+fts5_skip = pytest.mark.skipif(not fts5_available(), reason="SQLite FTS5 extension missing")
+
+
+@fts5_skip
+def test_cli_index_with_fts5_backend_writes_refs(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "index",
+            "--root",
+            str(fixture_skills_root),
+            "--backend",
+            "fts5",
+        ]
+    )
+    output = capsys.readouterr().out
+    assert "Indexed 3 skills" in output
+    assert 'Wrote 3 fts5 refs: {"indexed": 3}' in output
+
+
+@fts5_skip
+def test_cli_route_and_search_with_fts5_backend(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "route",
+            "Build an MCP server with tools",
+            "--backend",
+            "fts5",
+            "--json",
+        ]
+    )
+    route_payload = json.loads(capsys.readouterr().out)
+    assert route_payload["candidates"][0]["name"] == "mcp-server-patterns"
+    breakdown = route_payload["candidates"][0]["score_breakdown"]
+    assert breakdown["semantic"] > 0
+
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "search",
+            "Astra vector backend",
+            "--backend",
+            "fts5",
+            "--json",
+        ]
+    )
+    search_payload = json.loads(capsys.readouterr().out)
+    assert search_payload[0]["name"] == "astra-vector-backend"
+    assert search_payload[0]["backend"] == "fts5"
+
+
+@fts5_skip
+def test_cli_eval_run_with_fts5_backend(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    cases = Path(__file__).parent / "fixtures" / "golden_routes.json"
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "eval",
+            "run",
+            "--fresh",
+            "--index-root",
+            str(fixture_skills_root),
+            "--backend",
+            "fts5",
+            "--cases",
+            str(cases),
+        ]
+    )
+    output = capsys.readouterr().out
+    assert "4/4 golden route cases passed" in output
+
+
+@fts5_skip
+def test_cli_backend_status_with_fts5_backend(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "backend", "status", "--backend", "fts5"])
+    output = capsys.readouterr().out
+    assert "fts5 status=ready" in output
+    assert "search_available: True" in output
 
 
 def test_cli_eval_tune_prints_best_weights(

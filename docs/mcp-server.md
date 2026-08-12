@@ -55,7 +55,7 @@ Inputs:
 - `request`
 - `repo` optional
 - `catalog` optional
-- `backend` optional: `local` or `astra`
+- `backend` optional: `local`, `fts5`, or `astra`
 - `limit` optional
 
 Returns ranked skills, reasons, confidence, evidence snippets, suggested order,
@@ -67,7 +67,7 @@ Inputs:
 
 - `query`
 - `catalog` optional
-- `backend` optional: `local` or `astra`
+- `backend` optional: `local`, `fts5`, or `astra`
 - `limit` optional
 
 Returns search rows with lexical/backend scores and evidence snippets.
