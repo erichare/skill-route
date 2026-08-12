@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import skillroute
 from skillroute import ui_server
 from skillroute.catalog import Catalog
+from skillroute.context import REPO_ROOT_ENV
 from skillroute.routing import Router
 from skillroute.ui_server import backend_from_name, create_app, default_web_dist
 
@@ -111,3 +112,51 @@ def test_app_version_matches_package(indexed_catalog: Catalog, tmp_path: Path) -
     assert app.version == skillroute.__version__
     assert skillroute.__version__
     assert skillroute.__version__ != "0.0.0.dev0"
+
+
+def test_route_preview_rejects_repo_without_configured_root(
+    indexed_catalog: Catalog, tmp_path: Path, monkeypatch
+) -> None:
+    """An HTTP caller must not be able to point route-preview at any path."""
+    monkeypatch.delenv(REPO_ROOT_ENV, raising=False)
+    client = build_client(indexed_catalog, tmp_path / "empty-dist")
+
+    response = client.post(
+        "/api/route-preview", json={"request": "Build an MCP server", "repo": "/etc"}
+    )
+
+    assert response.status_code == 400
+    assert REPO_ROOT_ENV in response.json()["detail"]
+
+
+def test_route_preview_honors_repo_inside_configured_root(
+    indexed_catalog: Catalog, tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "allowed"
+    (root / "project").mkdir(parents=True)
+    monkeypatch.setenv(REPO_ROOT_ENV, str(root))
+    client = build_client(indexed_catalog, tmp_path / "empty-dist")
+
+    response = client.post(
+        "/api/route-preview", json={"request": "Build an MCP server", "repo": "project"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["repo_context"]["repo_path"] == str((root / "project").resolve())
+
+
+def test_route_preview_rejects_repo_escaping_configured_root(
+    indexed_catalog: Catalog, tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "allowed"
+    root.mkdir()
+    (tmp_path / "secret").mkdir()
+    monkeypatch.setenv(REPO_ROOT_ENV, str(root))
+    client = build_client(indexed_catalog, tmp_path / "empty-dist")
+
+    for escape in ["../secret", str(tmp_path / "secret"), "/etc"]:
+        response = client.post(
+            "/api/route-preview", json={"request": "Build an MCP server", "repo": escape}
+        )
+        assert response.status_code == 400, escape
+        assert "must stay inside" in response.json()["detail"]

@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `skillroute eval tune` grid-searches weights against golden route cases
   so changes are backed by eval evidence. Defaults are unchanged.
 
+### Security
+
+- The Skill Atlas `POST /api/route-preview` endpoint no longer accepts an
+  arbitrary `repo` filesystem path. Any caller who could reach the local UI
+  server could use it to probe the disk: the response reports whether a
+  directory exists, its resolved absolute path, which marker files it holds,
+  and how many files it contains. A `repo` is now honored only when
+  `SKILLROUTE_REPO_ROOT` names a base directory, and only for paths that
+  resolve inside it (CodeQL `py/path-injection`). The bundled UI never sent
+  `repo`, and the CLI's `--repo` is unaffected.
+
 [Unreleased]: https://github.com/erichare/skill-route/compare/v0.1.0...HEAD
 
 ## [0.1.0] - 2026-08-10

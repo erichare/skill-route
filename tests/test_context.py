@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from skillroute.context import collect_repo_context
+import pytest
+
+from skillroute.context import (
+    REPO_ROOT_ENV,
+    allowed_repo_root,
+    collect_repo_context,
+    resolve_repo_within,
+)
 
 
 def test_collect_repo_context_none_repo() -> None:
@@ -34,3 +41,48 @@ def test_collect_repo_context_truncates_large_scan(tmp_path: Path) -> None:
     context = collect_repo_context(tmp_path)
     assert "truncated_file_scan" in context["signals"]
     assert context["file_count"] == 1000
+
+
+def test_allowed_repo_root_unset_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(REPO_ROOT_ENV, raising=False)
+    assert allowed_repo_root() is None
+
+    monkeypatch.setenv(REPO_ROOT_ENV, "")
+    assert allowed_repo_root() is None
+
+
+def test_allowed_repo_root_resolves(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv(REPO_ROOT_ENV, str(tmp_path))
+    assert allowed_repo_root() == tmp_path.resolve()
+
+
+def test_resolve_repo_within_accepts_contained_paths(tmp_path: Path) -> None:
+    root = tmp_path.resolve()
+    (root / "project").mkdir()
+
+    assert resolve_repo_within(root / "project", root) == root / "project"
+    assert resolve_repo_within("project", root) == root / "project"  # relative to root
+    assert resolve_repo_within(root, root) == root  # the root itself
+
+
+def test_resolve_repo_within_rejects_escapes(tmp_path: Path) -> None:
+    root = (tmp_path / "allowed").resolve()
+    root.mkdir()
+    outside = (tmp_path / "secret").resolve()
+    outside.mkdir()
+
+    for escape in [str(outside), "../secret", "project/../../secret", "/etc"]:
+        with pytest.raises(ValueError, match="must stay inside"):
+            resolve_repo_within(escape, root)
+
+
+def test_resolve_repo_within_rejects_symlink_escape(tmp_path: Path) -> None:
+    """Resolution happens before the check, so a symlink out is still caught."""
+    root = (tmp_path / "allowed").resolve()
+    root.mkdir()
+    outside = (tmp_path / "secret").resolve()
+    outside.mkdir()
+    (root / "sneaky").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="must stay inside"):
+        resolve_repo_within(root / "sneaky", root)

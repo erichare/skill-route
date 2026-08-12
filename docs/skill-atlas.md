@@ -57,3 +57,23 @@ Run the Python API and built UI together:
 ```bash
 uv run skillroute ui --no-open
 ```
+
+## Repo context over the API
+
+`POST /api/route-preview` accepts an optional `repo` for language and toolchain
+signals, but it is rejected by default. Anything that can reach the server can
+call that endpoint, and an unrestricted path would let it probe the filesystem:
+the response reports whether a directory exists, its resolved absolute path,
+which marker files it holds, and how many files it contains.
+
+Point `SKILLROUTE_REPO_ROOT` at a base directory to enable it. Paths are
+resolved before they are checked — `..` segments and symlinks leading outside
+the root are rejected — and relative paths are taken against the root:
+
+```bash
+SKILLROUTE_REPO_ROOT=~/code uv run skillroute ui --no-open
+```
+
+This applies only to the HTTP API. `skillroute route --repo <path>` on the CLI
+is unrestricted, since naming your own checkout on your own machine is not the
+same trust boundary.

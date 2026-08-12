@@ -17,6 +17,7 @@ from skillroute.atlas import (
 )
 from skillroute.backends import backend_from_name
 from skillroute.catalog import Catalog, default_catalog_path
+from skillroute.context import REPO_ROOT_ENV, allowed_repo_root, resolve_repo_within
 from skillroute.routing import Router
 
 try:
@@ -37,6 +38,34 @@ class RoutePreviewRequest(BaseModel):
     repo: str | None = None
     backend: str | None = None
     limit: int = Field(default=5, ge=1, le=20)
+
+
+def resolve_preview_repo(repo: str | None) -> Path | None:
+    """Validate a caller-supplied repo path arriving over HTTP.
+
+    The bundled UI never sends one. Honoring an arbitrary path here turns
+    route-preview into a filesystem probe: the response echoes the resolved
+    absolute path, which marker files exist, the languages present, and a file
+    count, so an unauthenticated local caller could walk the disk with it. A
+    repo is therefore only accepted when SKILLROUTE_REPO_ROOT names a base
+    directory to confine it to. The CLI is unaffected -- a user naming their
+    own checkout on their own machine is not this boundary.
+    """
+    if not repo:
+        return None
+    root = allowed_repo_root()
+    if root is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"repo is not accepted over the HTTP API. Set {REPO_ROOT_ENV} to a base "
+                "directory to allow repo paths confined to it."
+            ),
+        )
+    try:
+        return resolve_repo_within(repo, root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def create_app(catalog_path: Path | str | None = None, web_dist: Path | None = None) -> FastAPI:
@@ -78,11 +107,12 @@ def create_app(catalog_path: Path | str | None = None, web_dist: Path | None = N
             backend = backend_from_name(request.backend)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        repo = resolve_preview_repo(request.repo)
         router = Router(catalog, backend=backend)
         return route_preview_payload(
             catalog,
             request=request.request,
-            repo=request.repo,
+            repo=repo,
             limit=request.limit,
             router=router,
         )

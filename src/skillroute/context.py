@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
+
+REPO_ROOT_ENV = "SKILLROUTE_REPO_ROOT"
 
 LANGUAGE_EXTENSIONS = {
     ".go": "go",
@@ -24,6 +27,34 @@ SIGNAL_FILES = {
     "requirements.txt": "python",
     "Package.swift": "swift",
 }
+
+
+def allowed_repo_root() -> Path | None:
+    """Base directory callers may point ``repo`` at, or None when unset.
+
+    Only consulted on untrusted surfaces. A local CLI user naming their own
+    checkout is not a trust boundary; an HTTP caller naming a path is.
+    """
+    raw = os.environ.get(REPO_ROOT_ENV)
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+def resolve_repo_within(repo: str | Path, root: Path) -> Path:
+    """Resolve ``repo`` and confirm it stays inside ``root``.
+
+    Relative paths are taken against ``root``. Resolution happens before the
+    containment check, so ``..`` segments and symlinks pointing outside are
+    caught rather than smuggled through.
+    """
+    candidate = Path(repo).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(f"repo must stay inside {root}, got {resolved}")
+    return resolved
 
 
 def collect_repo_context(repo: Path | None) -> dict[str, Any]:
