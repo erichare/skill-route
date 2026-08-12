@@ -15,6 +15,7 @@ from skillroute.backends import (
     AstraDataAPIBackend,
     AstraDataAPIError,
     RetrievalBackend,
+    SqliteFTS5Backend,
     backend_from_name,
 )
 from skillroute.catalog import Catalog, default_catalog_path
@@ -243,14 +244,20 @@ def cmd_index(args: argparse.Namespace) -> None:
     backend = backend_from_args(args)
     skills = catalog.index_root(args.root)
     print(f"Indexed {len(skills)} skills into {catalog.path}")
-    if backend.name != "local-token":
+    refs: list[dict[str, Any]]
+    if isinstance(backend, SqliteFTS5Backend):
+        # FTS5 indexes itself at search time; refs only record catalog coverage.
+        refs = backend.upsert_skills(skills)
+    elif backend.name != "local-token":
         refs = run_astra_command(lambda: backend.upsert_skills(skills))
-        for ref in refs:
-            catalog.save_backend_ref(
-                ref["skill_id"], ref["backend"], ref["ref"], ref.get("status", "indexed")
-            )
-        statuses = count_ref_statuses(refs)
-        print(f"Wrote {len(refs)} {backend.name} refs: {json.dumps(statuses, sort_keys=True)}")
+    else:
+        return
+    for ref in refs:
+        catalog.save_backend_ref(
+            ref["skill_id"], ref["backend"], ref["ref"], ref.get("status", "indexed")
+        )
+    statuses = count_ref_statuses(refs)
+    print(f"Wrote {len(refs)} {backend.name} refs: {json.dumps(statuses, sort_keys=True)}")
 
 
 def cmd_route(args: argparse.Namespace) -> None:

@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- SQLite FTS5 retrieval backend (`--backend fts5`, alias `sqlite-fts5`):
+  local BM25 ranking with term-frequency and document-length normalization on
+  top of the existing token-overlap lexical score. Query input is escaped so
+  FTS5 syntax in requests is treated as literal terms. Available in the CLI,
+  bridge, and MCP server backend choices.
+
+[Unreleased]: https://github.com/erichare/skill-route/compare/v0.1.0...HEAD
+
 ## [0.1.0] - 2026-08-10
 
 First release.

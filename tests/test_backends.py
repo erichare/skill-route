@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+import threading
+
 import pytest
 
 from skillroute.backends import (
@@ -7,9 +10,14 @@ from skillroute.backends import (
     AstraDataAPIError,
     LangChainBackendAdapter,
     LocalTokenBackend,
+    SqliteFTS5Backend,
     backend_from_name,
+    build_fts_match_query,
+    fts5_available,
 )
 from skillroute.catalog import Catalog
+
+requires_fts5 = pytest.mark.skipif(not fts5_available(), reason="SQLite FTS5 extension missing")
 
 
 class RecordingTransport:
@@ -210,6 +218,18 @@ def test_backend_from_name_resolves_known_backends() -> None:
     assert backend_from_name("astra").name == "astra-data-api"
 
 
+@requires_fts5
+def test_backend_from_name_resolves_fts5() -> None:
+    assert backend_from_name("fts5").name == "fts5"
+    assert backend_from_name("sqlite-fts5").name == "fts5"
+
+
+@requires_fts5
+def test_backend_from_name_fts5_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SKILLROUTE_BACKEND", "fts5")
+    assert backend_from_name(None).name == "fts5"
+
+
 def test_backend_from_name_uses_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SKILLROUTE_BACKEND", "astra")
     assert backend_from_name(None).name == "astra-data-api"
@@ -257,3 +277,200 @@ def test_langchain_adapter_status() -> None:
 
     missing = LangChainBackendAdapter(vectorstore=None).status()
     assert missing["status"] == "not_configured"
+
+
+@requires_fts5
+def test_fts5_backend_contract(indexed_catalog: Catalog) -> None:
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    refs = backend.upsert_skills(skills)
+    hits = backend.search("pytest golden eval", skills)
+
+    assert refs[0]["backend"] == "fts5"
+    assert refs[0]["ref"] == skills[0].content_hash
+    assert hits[0]["skill_id"] == indexed_catalog.get_skill("python-testing").id
+    assert hits[0]["backend"] == "fts5"
+    assert 0.0 <= hits[0]["score"] < 1.0
+
+
+@requires_fts5
+def test_fts5_backend_scores_are_ordered(indexed_catalog: Catalog) -> None:
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    hits = backend.search("mcp server tools", skills)
+
+    scores = [hit["score"] for hit in hits]
+    assert scores == sorted(scores, reverse=True)
+    assert hits[0]["skill_id"] == indexed_catalog.get_skill("mcp-server-patterns").id
+
+
+@requires_fts5
+def test_fts5_backend_empty_and_no_match_queries(indexed_catalog: Catalog) -> None:
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    assert backend.search("", skills) == []
+    assert backend.search("   ", skills) == []
+    assert backend.search("zzz-no-such-term-zzz", skills) == []
+    assert backend.search("pytest", []) == []
+
+
+@requires_fts5
+def test_fts5_backend_escapes_query_syntax(indexed_catalog: Catalog) -> None:
+    """User input must never be parsed as FTS5 query syntax."""
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+    mcp_id = indexed_catalog.get_skill("mcp-server-patterns").id
+
+    # AND/OR/NOT/NEAR, parens, column filters, prefixes, and quotes are all
+    # legal FTS5 syntax; they must be treated as literal search terms instead.
+    # Each of these still has to find the skill its real words point at --
+    # a query parsed as syntax would error out or filter the hit away, and
+    # search() reports both of those as an empty result.
+    for hostile in [
+        'mcp AND (server OR "injected")',
+        "server:xyz NEAR/2 mcp",
+        "mcp NOT server",
+        "vectorize* mcp",
+    ]:
+        rows = backend.search(hostile, skills)
+        assert rows, f"{hostile!r} returned no hits -- input was not escaped"
+        assert rows[0]["skill_id"] == mcp_id
+        assert all(row["backend"] == "fts5" for row in rows)
+
+    # Embedded quotes are the fragile case: they have to be doubled rather
+    # than closing the phrase early and reopening as syntax.
+    quoted = backend.search('pytest"" OR """"', skills)
+    assert quoted
+    assert quoted[0]["skill_id"] == indexed_catalog.get_skill("python-testing").id
+
+    # Left unescaped these really are hostile, so the assertions above bite:
+    # a column filter is rejected outright, and NOT drops the matching skill.
+    connection = backend._index(skills)
+    with pytest.raises(sqlite3.OperationalError):
+        connection.execute("SELECT skill_id FROM fts WHERE fts MATCH ?", ("server:xyz NEAR/2 mcp",))
+    raw = connection.execute(
+        "SELECT skill_id FROM fts WHERE fts MATCH ?", ("mcp NOT server",)
+    ).fetchall()
+    assert raw == []
+
+
+def test_build_fts_match_query() -> None:
+    assert build_fts_match_query("") is None
+    assert build_fts_match_query("  ") is None
+    assert build_fts_match_query("pytest") == '"pytest"'
+    assert build_fts_match_query("pytest golden") == '"pytest" OR "golden"'
+    # Whitespace-separated fragments each become their own quoted term, and
+    # embedded double quotes are escaped by doubling.
+    assert build_fts_match_query('say "hi"') == '"say" OR """hi"""'
+
+
+@requires_fts5
+def test_fts5_backend_drops_idf_floor_noise(indexed_catalog: Catalog) -> None:
+    """Terms shared by every skill must not pad results with 0.0-score hits."""
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    # "skills" is a tag on every fixture, so FTS5 matches all of them at its
+    # clamped 1e-6 IDF. None of that is relevance, so none of it is a hit.
+    assert backend.search("skills", skills) == []
+
+    # A query mixing a real term with catalog-wide ones keeps only the real
+    # hit, the way LocalTokenBackend reports a single relevant skill rather
+    # than every skill padded out to a 0.0 score.
+    hits = backend.search("write pytest fixtures for my skills", skills)
+    assert [hit["skill_id"] for hit in hits] == [indexed_catalog.get_skill("python-testing").id]
+    assert hits[0]["score"] >= backend.min_score
+
+
+@requires_fts5
+def test_fts5_backend_search_is_usable_from_another_thread(indexed_catalog: Catalog) -> None:
+    """A cached index outlives the thread that built it (UI server request pool)."""
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    expected = backend.search("mcp server tools", skills)
+    assert expected
+
+    results: list[list[dict[str, object]]] = []
+    errors: list[Exception] = []
+
+    def search_in_thread() -> None:
+        try:
+            results.append(backend.search("mcp server tools", skills))
+        except Exception as exc:  # noqa: BLE001 - surfaced on the main thread
+            errors.append(exc)
+
+    worker = threading.Thread(target=search_in_thread)
+    worker.start()
+    worker.join()
+
+    assert not errors, f"cross-thread search raised {errors[0]!r}"
+    assert results == [expected]
+
+
+@requires_fts5
+def test_fts5_backend_reuses_index_cache(indexed_catalog: Catalog) -> None:
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    backend.search("pytest", skills)
+    assert len(backend._index_cache) == 1
+    cached_connection = next(iter(backend._index_cache.values()))
+
+    backend.search("mcp", skills)
+    assert len(backend._index_cache) == 1
+    assert next(iter(backend._index_cache.values())) is cached_connection
+
+
+@requires_fts5
+def test_fts5_backend_cache_eviction_is_bounded(indexed_catalog: Catalog) -> None:
+    from skillroute.models import SkillRecord
+
+    skills = indexed_catalog.list_skills()
+    backend = SqliteFTS5Backend()
+
+    for index in range(12):
+        variant = [
+            SkillRecord(
+                id=f"{skill.id}-{index}",
+                name=skill.name,
+                description=skill.description,
+                skill_path=skill.skill_path,
+                bundle_path=skill.bundle_path,
+                root_path=skill.root_path,
+                content_hash=f"{skill.content_hash}-{index}",
+                tags=skill.tags,
+                facets=skill.facets,
+                excerpts=skill.excerpts,
+            )
+            for skill in skills
+        ]
+        backend.search("pytest", variant)
+
+    assert len(backend._index_cache) <= 8
+    # Evicted connections are closed; cached ones stay usable.
+    for connection in backend._index_cache.values():
+        assert connection.execute("SELECT 1").fetchone() == (1,)
+
+
+@requires_fts5
+def test_fts5_backend_status_ready() -> None:
+    status = SqliteFTS5Backend().status()
+    assert status["configured"] is True
+    assert status["status"] == "ready"
+    assert status["search_available"] is True
+    assert status["write_available"] is True
+
+
+def test_fts5_normalize_bm25() -> None:
+    backend = SqliteFTS5Backend()
+    assert backend.normalize_bm25(0.0) == 0.0
+    assert backend.normalize_bm25(5.0) == 0.0  # positive rank is clamped to no match
+    score = backend.normalize_bm25(-6.0)
+    assert score == pytest.approx(0.5)
+    assert backend.normalize_bm25(-60.0) > score
+    assert backend.normalize_bm25(-60.0) < 1.0
+
