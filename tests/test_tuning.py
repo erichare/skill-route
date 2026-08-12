@@ -8,8 +8,11 @@ import pytest
 from skillroute.catalog import Catalog
 from skillroute.routing import DEFAULT_WEIGHTS, Router, RouteWeights
 from skillroute.tuning import (
+    CLARIFICATION_GAPS,
+    CONFIDENCE_FLOORS,
     distance_from_defaults,
     evaluate_weights,
+    grid_divisions,
     iter_blend_grid,
     reciprocal_rank,
     tune_weights,
@@ -42,6 +45,25 @@ def test_route_weights_rejects_negative_and_non_numeric() -> None:
         RouteWeights.from_overrides({"graph": -0.1})
     with pytest.raises(ValueError, match="must be a number"):
         RouteWeights.from_overrides({"graph": "lots"})
+
+
+def test_route_weights_rejects_non_finite() -> None:
+    """inf/NaN slip past a >= 0 check and would poison every score."""
+    for bad in (float("inf"), float("-inf"), float("nan")):
+        with pytest.raises(ValueError, match="must be finite"):
+            RouteWeights.from_overrides({"lexical": bad})
+
+
+def test_route_weights_from_env_rejects_non_finite(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Python's json accepts both of these spellings even though neither is
+    # standard JSON, so the env path has to reject them itself.
+    monkeypatch.setenv("SKILLROUTE_WEIGHTS", '{"lexical": 1e999}')
+    with pytest.raises(ValueError, match="must be finite"):
+        RouteWeights.from_env()
+
+    monkeypatch.setenv("SKILLROUTE_WEIGHTS", '{"lexical": NaN}')
+    with pytest.raises(ValueError, match="must be finite"):
+        RouteWeights.from_env()
 
 
 def test_route_weights_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,6 +108,28 @@ def test_iter_blend_grid_covers_simplex() -> None:
         assert sum(blend.values()) == pytest.approx(1.0)
         assert all(value >= 0 for value in blend.values())
     assert {"lexical": 1.0, "semantic": 0.0, "repo_context": 0.0, "graph": 0.0} in grid
+
+
+def test_iter_blend_grid_stays_on_simplex_for_awkward_steps() -> None:
+    """A step that does not divide 1 evenly must still sum to 1.0, not 0.9/1.2.
+
+    Multiplying an index by the raw step made every blend sum to 0.9 at
+    step=0.3 and 1.2 at step=0.6, silently rescaling confidence across runs.
+    """
+    for step in (0.3, 0.4, 0.6, 0.7):
+        grid = list(iter_blend_grid(step=step))
+        assert grid
+        for blend in grid:
+            assert sum(blend.values()) == pytest.approx(1.0, abs=1e-6)
+            assert all(value >= 0 for value in blend.values())
+
+
+def test_grid_divisions_snaps_step_to_nearest_reciprocal() -> None:
+    assert grid_divisions(0.2) == 5
+    assert grid_divisions(0.5) == 2
+    assert grid_divisions(0.3) == 3  # snapped to 1/3
+    assert grid_divisions(0.7) == 1  # snapped to 1/1
+    assert grid_divisions(1.0) == 1
 
 
 def test_iter_blend_grid_rejects_bad_step() -> None:
@@ -137,6 +181,44 @@ def test_tune_weights_prefers_defaults_when_all_pass(
     assert scores == sorted(scores, reverse=True)
     # Default weights pass every case, so the tiebreak keeps them on top.
     assert best.weights == DEFAULT_WEIGHTS
+
+
+def test_tune_weights_explores_thresholds_for_the_default_blend(
+    tmp_path: Path, fixture_skills_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The default blend with non-default thresholds must stay reachable.
+
+    Skipping the default blend wholesale (rather than the exact default weight
+    set) meant a corpus whose best result is a clarification-threshold change
+    at the default ranking weights could never surface it. Only steps that put
+    the default blend on the grid hit this, so the grid is stubbed to it.
+    """
+    catalog = Catalog(tmp_path / "catalog.db")
+    catalog.index_root(fixture_skills_root)
+    cases_path = Path(__file__).parent / "fixtures" / "golden_routes.json"
+    default_blend = {
+        name: DEFAULT_WEIGHTS[name]
+        for name in ("lexical", "semantic", "repo_context", "graph")
+    }
+    monkeypatch.setattr(
+        "skillroute.tuning.iter_blend_grid", lambda step=0.2: iter([dict(default_blend)])
+    )
+
+    results = tune_weights(catalog, cases_path)
+
+    # The default weight set, plus every other floor x gap pairing of the same
+    # blend -- 5 floors x 3 gaps, with the exact default deduped out.
+    assert len(results) == len(CONFIDENCE_FLOORS) * len(CLARIFICATION_GAPS)
+    assert all(
+        {name: result.weights[name] for name in default_blend} == default_blend
+        for result in results
+    )
+    thresholds = {
+        (result.weights["confidence_floor"], result.weights["clarification_gap"])
+        for result in results
+    }
+    assert len(thresholds) == len(results), "duplicate threshold pairs were scored"
+    assert (DEFAULT_WEIGHTS["confidence_floor"], DEFAULT_WEIGHTS["clarification_gap"]) in thresholds
 
 
 def test_tune_weights_empty_cases(tmp_path: Path) -> None:

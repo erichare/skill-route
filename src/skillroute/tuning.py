@@ -38,24 +38,34 @@ class TuneResult:
         }
 
 
+def grid_divisions(step: float) -> int:
+    """Number of grid divisions for ``step``, i.e. the effective step is 1/N."""
+    if step <= 0 or step > 1:
+        raise ValueError("step must be in (0, 1]")
+    return max(1, round(1.0 / step))
+
+
 def iter_blend_grid(step: float = 0.2) -> Iterator[dict[str, float]]:
     """Yield blend weights on the unit simplex at the given step.
 
     lexical + semantic + repo_context + graph always sum to 1.0 so confidence
-    calibration stays comparable across the whole grid.
+    calibration stays comparable across the whole grid. A step that does not
+    divide 1 evenly is snapped to the nearest 1/N (0.3 becomes 1/3, 0.4 becomes
+    1/2): weights come off the integer grid rather than from repeated addition
+    of ``step``, which would have them summing to 0.9 or 1.2 instead. Values
+    are rounded to 9 places, well inside any step the grid actually resolves,
+    so a blend of thirds still sums to 1.0 within 1e-9.
     """
-    if step <= 0 or step > 1:
-        raise ValueError("step must be in (0, 1]")
-    steps = round(1.0 / step)
+    steps = grid_divisions(step)
     for lexical_index in range(steps + 1):
         for semantic_index in range(steps + 1 - lexical_index):
             for repo_index in range(steps + 1 - lexical_index - semantic_index):
                 graph_index = steps - lexical_index - semantic_index - repo_index
                 yield {
-                    "lexical": round(lexical_index * step, 6),
-                    "semantic": round(semantic_index * step, 6),
-                    "repo_context": round(repo_index * step, 6),
-                    "graph": round(graph_index * step, 6),
+                    "lexical": round(lexical_index / steps, 9),
+                    "semantic": round(semantic_index / steps, 9),
+                    "repo_context": round(repo_index / steps, 9),
+                    "graph": round(graph_index / steps, 9),
                 }
 
 
@@ -149,13 +159,19 @@ def tune_weights(
             score=passed / len(cases) + mrr + 0.25 * clarification_accuracy,
         )
     )
+    # Dedupe on the whole weight set, not on the blend alone: when the step
+    # puts the default blend on the grid, its non-default floor/gap pairings
+    # are still worth exploring -- only the exact default was scored above.
+    seen = {weights_key(default_weights)}
     for blend in iter_blend_grid(step):
-        if blend == {name: DEFAULT_WEIGHTS[name] for name in ("lexical", "semantic", "repo_context", "graph")}:
-            continue  # evaluated above
         for floor, gap in product(CONFIDENCE_FLOORS, CLARIFICATION_GAPS):
             weights = RouteWeights.from_overrides(
                 {**blend, "confidence_floor": floor, "clarification_gap": gap}
             )
+            key = weights_key(weights)
+            if key in seen:
+                continue
+            seen.add(key)
             passed, mrr, clarification_accuracy = evaluate_weights(catalog, backend, cases, weights)
             score = passed / len(cases) + mrr + 0.25 * clarification_accuracy
             results.append(
@@ -170,6 +186,11 @@ def tune_weights(
             )
     results.sort(key=lambda result: (-result.score, distance_from_defaults(result.weights)))
     return results
+
+
+def weights_key(weights: RouteWeights) -> tuple[tuple[str, float], ...]:
+    """Hashable identity of a full weight set, for deduping the search grid."""
+    return tuple(sorted(weights.to_json().items()))
 
 
 def distance_from_defaults(weights: dict[str, float]) -> float:

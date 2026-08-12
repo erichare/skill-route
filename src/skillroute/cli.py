@@ -120,7 +120,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--step",
         type=float,
         default=0.2,
-        help="Blend weight grid step in (0, 1]. Smaller explores more combinations.",
+        help=(
+            "Blend weight grid step in (0, 1]. Smaller explores more combinations. "
+            "Snapped to the nearest 1/N so blends stay on the unit simplex."
+        ),
     )
     eval_tune_parser.add_argument(
         "--top",
@@ -272,6 +275,14 @@ def backend_from_args(args: argparse.Namespace) -> RetrievalBackend:
         raise SystemExit(str(exc)) from exc
 
 
+def router_from_args(catalog: Catalog, args: argparse.Namespace) -> Router:
+    """Build a Router, reporting a bad SKILLROUTE_WEIGHTS the way bad flags are."""
+    try:
+        return Router(catalog, backend=backend_from_args(args))
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def cmd_index(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
     backend = backend_from_args(args)
@@ -295,7 +306,7 @@ def cmd_index(args: argparse.Namespace) -> None:
 
 def cmd_route(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    response = Router(catalog, backend=backend_from_args(args)).route(args.request, repo=args.repo, limit=args.limit)
+    response = router_from_args(catalog, args).route(args.request, repo=args.repo, limit=args.limit)
     if args.as_json:
         print_json(response)
         return
@@ -304,7 +315,7 @@ def cmd_route(args: argparse.Namespace) -> None:
 
 def cmd_search(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    rows = Router(catalog, backend=backend_from_args(args)).search(args.query, limit=args.limit)
+    rows = router_from_args(catalog, args).search(args.query, limit=args.limit)
     if args.as_json:
         print_json(rows)
         return
@@ -352,7 +363,7 @@ def cmd_eval_run(args: argparse.Namespace) -> None:
         for root in args.index_root:
             catalog.index_root(root)
         try:
-            results = run_golden_routes(Router(catalog, backend=backend_from_args(args)), args.cases)
+            results = run_golden_routes(router_from_args(catalog, args), args.cases)
         except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
             raise SystemExit(f"Could not run eval cases from {args.cases}: {exc}") from exc
     if args.as_json:

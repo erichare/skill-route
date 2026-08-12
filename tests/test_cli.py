@@ -874,3 +874,21 @@ def test_cli_eval_tune_json_output(
         "confidence_floor",
         "clarification_gap",
     }
+
+
+def test_cli_route_reports_bad_weights_env_cleanly(
+    tmp_path: Path, fixture_skills_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A typo in SKILLROUTE_WEIGHTS should read like any other config error."""
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    monkeypatch.setenv("SKILLROUTE_WEIGHTS", "{not json")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--catalog", str(catalog_path), "route", "Build an MCP server"])
+    assert "SKILLROUTE_WEIGHTS is not valid JSON" in str(excinfo.value)
+
+    monkeypatch.setenv("SKILLROUTE_WEIGHTS", '{"lexical": -1}')
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--catalog", str(catalog_path), "search", "mcp"])
+    assert "must be >= 0" in str(excinfo.value)

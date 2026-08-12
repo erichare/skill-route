@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
@@ -56,6 +57,10 @@ class RouteWeights:
                 value = float(raw)  # type: ignore[arg-type]
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"Route weight {name} must be a number, got {raw!r}") from exc
+            # inf/NaN slip past the >= 0 check (NaN compares false against
+            # everything) and would poison every total and confidence.
+            if not math.isfinite(value):
+                raise ValueError(f"Route weight {name} must be finite, got {value}")
             if value < 0:
                 raise ValueError(f"Route weight {name} must be >= 0, got {value}")
             values[name] = value
