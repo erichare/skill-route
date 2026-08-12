@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   top of the existing token-overlap lexical score. Query input is escaped so
   FTS5 syntax in requests is treated as literal terms. Available in the CLI,
   bridge, and MCP server backend choices.
+- Routing weights are now explicit and tunable: `RouteWeights` replaces the
+  hardcoded blend constants, `SKILLROUTE_WEIGHTS` overrides them per process,
+  and `skillroute eval tune` grid-searches weights against golden route cases
+  so changes are backed by eval evidence. Defaults are unchanged.
 
 [Unreleased]: https://github.com/erichare/skill-route/compare/v0.1.0...HEAD
 

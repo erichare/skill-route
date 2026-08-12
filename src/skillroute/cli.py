@@ -34,6 +34,7 @@ from skillroute.metadata import (
 )
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
+from skillroute.tuning import tune_weights
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -98,6 +99,41 @@ def build_parser() -> argparse.ArgumentParser:
     add_backend_argument(eval_run_parser)
     eval_run_parser.add_argument("--json", action="store_true", dest="as_json")
     eval_run_parser.set_defaults(func=cmd_eval_run)
+    eval_tune_parser = eval_subparsers.add_parser(
+        "tune",
+        help="Grid-search routing weights against golden route cases",
+    )
+    eval_tune_parser.add_argument("--cases", type=Path, required=True)
+    eval_tune_parser.add_argument(
+        "--index-root",
+        type=Path,
+        action="append",
+        default=[],
+        help="Index a skill root before tuning. Can be passed multiple times.",
+    )
+    eval_tune_parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Tune against a temporary isolated catalog.",
+    )
+    eval_tune_parser.add_argument(
+        "--step",
+        type=float,
+        default=0.2,
+        help=(
+            "Blend weight grid step in (0, 1]. Smaller explores more combinations. "
+            "Snapped to the nearest 1/N so blends stay on the unit simplex."
+        ),
+    )
+    eval_tune_parser.add_argument(
+        "--top",
+        type=int,
+        default=5,
+        help="How many best weight sets to print.",
+    )
+    add_backend_argument(eval_tune_parser)
+    eval_tune_parser.add_argument("--json", action="store_true", dest="as_json")
+    eval_tune_parser.set_defaults(func=cmd_eval_tune)
 
     dogfood_parser = subparsers.add_parser("dogfood", help="Dogfood SkillRoute against local skill roots")
     dogfood_subparsers = dogfood_parser.add_subparsers(dest="dogfood_command", required=True)
@@ -239,6 +275,14 @@ def backend_from_args(args: argparse.Namespace) -> RetrievalBackend:
         raise SystemExit(str(exc)) from exc
 
 
+def router_from_args(catalog: Catalog, args: argparse.Namespace) -> Router:
+    """Build a Router, reporting a bad SKILLROUTE_WEIGHTS the way bad flags are."""
+    try:
+        return Router(catalog, backend=backend_from_args(args))
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def cmd_index(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
     backend = backend_from_args(args)
@@ -262,7 +306,7 @@ def cmd_index(args: argparse.Namespace) -> None:
 
 def cmd_route(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    response = Router(catalog, backend=backend_from_args(args)).route(args.request, repo=args.repo, limit=args.limit)
+    response = router_from_args(catalog, args).route(args.request, repo=args.repo, limit=args.limit)
     if args.as_json:
         print_json(response)
         return
@@ -271,7 +315,7 @@ def cmd_route(args: argparse.Namespace) -> None:
 
 def cmd_search(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    rows = Router(catalog, backend=backend_from_args(args)).search(args.query, limit=args.limit)
+    rows = router_from_args(catalog, args).search(args.query, limit=args.limit)
     if args.as_json:
         print_json(rows)
         return
@@ -319,7 +363,7 @@ def cmd_eval_run(args: argparse.Namespace) -> None:
         for root in args.index_root:
             catalog.index_root(root)
         try:
-            results = run_golden_routes(Router(catalog, backend=backend_from_args(args)), args.cases)
+            results = run_golden_routes(router_from_args(catalog, args), args.cases)
         except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
             raise SystemExit(f"Could not run eval cases from {args.cases}: {exc}") from exc
     if args.as_json:
@@ -334,6 +378,37 @@ def cmd_eval_run(args: argparse.Namespace) -> None:
             print(f"  {note}")
     if passed != len(results):
         raise SystemExit(1)
+
+
+def cmd_eval_tune(args: argparse.Namespace) -> None:
+    context = TemporaryDirectory() if args.fresh else nullcontext(None)
+    with context as temp_dir:
+        catalog = Catalog(Path(temp_dir) / "catalog.db") if temp_dir else catalog_from_args(args)
+        for root in args.index_root:
+            catalog.index_root(root)
+        try:
+            results = tune_weights(
+                catalog,
+                args.cases,
+                backend=backend_from_args(args),
+                step=args.step,
+            )
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise SystemExit(f"Could not tune weights from {args.cases}: {exc}") from exc
+    top = max(1, args.top)
+    if args.as_json:
+        print_json([result.to_json() for result in results[:top]])
+        return
+    if not results:
+        print("No eval cases to tune against.")
+        return
+    print(f"Top {min(top, len(results))} weight sets ({results[0].total} cases):")
+    for rank, result in enumerate(results[:top], start=1):
+        print(f"{rank}. score={result.score:.4f} passed={result.passed}/{result.total}")
+        print(f"   mrr={result.mean_reciprocal_rank:.4f} clarification={result.clarification_accuracy:.4f}")
+        print(f"   weights: {json.dumps(result.weights, sort_keys=True)}")
+    best = results[0]
+    print("\nApply with: SKILLROUTE_WEIGHTS='" + json.dumps(best.weights, sort_keys=True) + "'")
 
 
 def cmd_dogfood_roots(args: argparse.Namespace) -> None:

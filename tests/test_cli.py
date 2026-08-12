@@ -811,3 +811,84 @@ def test_cli_backend_status_with_fts5_backend(
     output = capsys.readouterr().out
     assert "fts5 status=ready" in output
     assert "search_available: True" in output
+
+
+def test_cli_eval_tune_prints_best_weights(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    cases = Path(__file__).parent / "fixtures" / "golden_routes.json"
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "eval",
+            "tune",
+            "--fresh",
+            "--index-root",
+            str(fixture_skills_root),
+            "--cases",
+            str(cases),
+            "--step",
+            "0.5",
+            "--top",
+            "2",
+        ]
+    )
+    output = capsys.readouterr().out
+    assert "Top 2 weight sets (4 cases):" in output
+    assert "Apply with: SKILLROUTE_WEIGHTS=" in output
+
+
+def test_cli_eval_tune_json_output(
+    tmp_path: Path, fixture_skills_root: Path, capsys
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    cases = Path(__file__).parent / "fixtures" / "golden_routes.json"
+    main(
+        [
+            "--catalog",
+            str(catalog_path),
+            "eval",
+            "tune",
+            "--fresh",
+            "--index-root",
+            str(fixture_skills_root),
+            "--cases",
+            str(cases),
+            "--step",
+            "0.5",
+            "--top",
+            "1",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert len(payload) == 1
+    assert payload[0]["passed"] == payload[0]["total"]
+    assert set(payload[0]["weights"]) == {
+        "lexical",
+        "semantic",
+        "repo_context",
+        "graph",
+        "confidence_floor",
+        "clarification_gap",
+    }
+
+
+def test_cli_route_reports_bad_weights_env_cleanly(
+    tmp_path: Path, fixture_skills_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A typo in SKILLROUTE_WEIGHTS should read like any other config error."""
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    monkeypatch.setenv("SKILLROUTE_WEIGHTS", "{not json")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--catalog", str(catalog_path), "route", "Build an MCP server"])
+    assert "SKILLROUTE_WEIGHTS is not valid JSON" in str(excinfo.value)
+
+    monkeypatch.setenv("SKILLROUTE_WEIGHTS", '{"lexical": -1}')
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--catalog", str(catalog_path), "search", "mcp"])
+    assert "must be >= 0" in str(excinfo.value)
