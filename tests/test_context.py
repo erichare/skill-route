@@ -86,3 +86,21 @@ def test_resolve_repo_within_rejects_symlink_escape(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="must stay inside"):
         resolve_repo_within(root / "sneaky", root)
+
+
+def test_resolve_repo_within_rejects_a_sibling_sharing_the_root_prefix(
+    tmp_path: Path,
+) -> None:
+    """The case that makes is_relative_to stronger than a startswith check.
+
+    CodeQL flags this function as py/path-injection because it does not model
+    is_relative_to as a barrier. Rewriting the check as a string prefix test to
+    satisfy the scanner would let this path through.
+    """
+    root = tmp_path / "root"
+    root.mkdir()
+    sibling = tmp_path / "root-evil"
+    sibling.mkdir()
+    assert str(sibling).startswith(str(root)), "precondition: shares the prefix"
+    with pytest.raises(ValueError, match="must stay inside"):
+        resolve_repo_within(sibling, root)

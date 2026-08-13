@@ -47,6 +47,17 @@ def resolve_repo_within(repo: str | Path, root: Path) -> Path:
     Relative paths are taken against ``root``. Resolution happens before the
     containment check, so ``..`` segments and symlinks pointing outside are
     caught rather than smuggled through.
+
+    CodeQL reports ``py/path-injection`` on the ``resolve()`` below and it is a
+    false positive: this function is the sanitizer, and the resolved value only
+    reaches a caller after ``is_relative_to`` passes. CodeQL does not model
+    ``is_relative_to`` as a barrier.
+
+    Do not rewrite this as a ``startswith`` prefix check to appease the scanner.
+    That pattern is what CodeQL recognises, and it is strictly weaker here: a
+    sibling directory sharing the root's name as a prefix (``/root-evil`` for a
+    root of ``/root``) passes a prefix test and is correctly rejected by
+    ``is_relative_to``. ``tests/test_context.py`` covers that case.
     """
     candidate = Path(repo).expanduser()
     if not candidate.is_absolute():
