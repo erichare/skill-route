@@ -137,11 +137,35 @@ def max_route_traces() -> int:
     return MAX_ROUTE_TRACES
 
 
+def user_catalog_path() -> Path:
+    """The catalog a machine-wide install uses: ``~/.skillroute/catalog.db``.
+
+    Matches where the installer already keeps its checkout (``~/.skillroute/``),
+    so SkillRoute owns one directory in $HOME rather than two.
+    """
+    return (Path.home() / ".skillroute" / "catalog.db").resolve()
+
+
 def default_catalog_path(base: Path | None = None) -> Path:
+    """Where to read or write the catalog when the caller did not say.
+
+    v0.1 and v0.2 resolved this against the working directory, which was fine
+    when a git checkout was the only way to run SkillRoute. Since 0.2 publishes
+    to PyPI and npm, `uvx skillroute` has no checkout at all and a
+    checkout-relative default names a directory that does not exist.
+
+    So the default is now user-scoped -- except that an *existing* project
+    catalog still wins. Anyone who indexed into their checkout under 0.1 or 0.2
+    keeps using it; switching them to an empty catalog under $HOME would look
+    exactly like their library disappearing.
+    """
     configured = os.environ.get("SKILLROUTE_CATALOG_PATH")
     if configured:
         return Path(configured).expanduser().resolve()
-    return ((base or Path.cwd()) / ".skillroute" / "catalog.db").resolve()
+    project = ((base or Path.cwd()) / ".skillroute" / "catalog.db").resolve()
+    if project.exists():
+        return project
+    return user_catalog_path()
 
 
 class Catalog:

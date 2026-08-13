@@ -74,7 +74,9 @@ Ranked skills:
 
 </details>
 
-The default catalog lives at `.skillroute/catalog.db`; point elsewhere with
+The default catalog lives at `~/.skillroute/catalog.db`. A `.skillroute/catalog.db`
+in the working directory is used instead when one already exists, so existing
+project catalogs keep working; point elsewhere with
 `--catalog <path>` or `SKILLROUTE_CATALOG_PATH`.
 
 ## Skill Atlas

@@ -50,7 +50,8 @@ The web build is required before `skillroute ui` can serve the Skill Atlas.
 uv run skillroute index --root examples/skills
 ```
 
-This creates `.skillroute/catalog.db` in the current directory unless you pass
+This creates `~/.skillroute/catalog.db` unless a `.skillroute/catalog.db` already
+exists in the current directory, in which case that one is used. Override with
 `--catalog` or set `SKILLROUTE_CATALOG_PATH`.
 
 ## Route A Request

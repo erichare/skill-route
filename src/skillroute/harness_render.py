@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from skillroute.catalog import default_catalog_path
+from skillroute.catalog import default_catalog_path, user_catalog_path
 from skillroute.harnesses import (
     HarnessManifest,
     InstallMode,
@@ -105,14 +105,23 @@ def build_harness_setup(
     resolved_scope = _resolve_scope(install, scope, harness=harness)
     resolved_platform = platform or current_platform()
     resolved_repo_root = (repo_root or default_repo_root()).expanduser().resolve()
+    resolved_source = server_source or DEFAULT_SERVER_SOURCE
+    # A published server has no checkout, so resolving its catalog against one
+    # would bake in a path that does not exist on the machine running the
+    # config. Only a `local` config may name the checkout's catalog.
     catalog_path = (
-        catalog.expanduser().resolve() if catalog else default_catalog_path(resolved_repo_root)
+        catalog.expanduser().resolve()
+        if catalog
+        else (
+            default_catalog_path(resolved_repo_root)
+            if resolved_source == "local"
+            else user_catalog_path()
+        )
     )
     selected_backend = (
         backend or os.environ.get("SKILLROUTE_BACKEND") or "local"
     ).strip().lower()
     entrypoint = local_entrypoint(resolved_repo_root)
-    resolved_source = server_source or DEFAULT_SERVER_SOURCE
     argv = (
         list(server_argv)
         if server_argv
