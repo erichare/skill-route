@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `skillroute stats` and a `skillroute.analytics` module answering three
+  question families from recorded routes: **library health** (which skills are
+  never offered, which are offered but never win, which descriptions compete
+  closely enough to shadow each other), **routing quality** (confidence
+  distribution, clarification rate, and which score component is carrying the
+  ranking), and a **per-harness breakdown**. Schema v2 denormalized every ranked
+  candidate into `route_trace_candidates` for exactly this, so it is SQL over
+  columns rather than parsing twenty thousand JSON blobs. `--since` accepts a
+  span (`30d`, `12h`, `2w`) or an ISO date, `--harness` narrows to one caller,
+  and `--json` emits the same numbers for tooling. Routes with no recorded
+  harness are reported as `unknown` rather than dropped.
+
+### Fixed
+
+- `skillroute stats` on a catalog that was never indexed reports zero routes
+  instead of failing with a missing-table SQL error.
+
 ## [0.2.0] - 2026-08-13
 
 ### Added

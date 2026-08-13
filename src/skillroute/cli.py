@@ -11,6 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import skillroute
+from skillroute.analytics import (
+    harness_breakdown,
+    library_health,
+    parse_since,
+    render_stats,
+    routing_quality,
+)
 from skillroute.attribution import resolve_attribution
 from skillroute.backends import (
     BACKEND_CHOICES,
@@ -360,6 +367,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     harness_doctor_parser.add_argument("--json", action="store_true", dest="as_json")
     harness_doctor_parser.set_defaults(func=cmd_harness_doctor)
+
+    stats_parser = subparsers.add_parser(
+        "stats", help="Report on routing quality and skill-library health"
+    )
+    stats_parser.add_argument(
+        "--since",
+        default=None,
+        help="Only count routes since a span (30d, 12h, 2w) or an ISO date",
+    )
+    stats_parser.add_argument(
+        "--harness", default=None, help="Only count routes from this harness"
+    )
+    stats_parser.add_argument(
+        "--limit", type=int, default=10, help="How many skills to list per section"
+    )
+    stats_parser.add_argument("--json", action="store_true", dest="as_json")
+    stats_parser.set_defaults(func=cmd_stats)
 
     ui_parser = subparsers.add_parser("ui", help="Launch the local Skill Atlas web UI")
     ui_parser.add_argument("--host", default="127.0.0.1")
@@ -833,6 +857,32 @@ def cmd_harness_doctor(args: argparse.Namespace) -> None:
     # Non-zero exit so `harness doctor` is usable as a CI gate.
     if any(report.status == STATUS_FAIL for report in reports):
         raise SystemExit(1)
+
+
+def cmd_stats(args: argparse.Namespace) -> None:
+    try:
+        since = parse_since(args.since)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    catalog = catalog_from_args(args)
+    # Running `stats` before ever indexing is a reasonable thing to do, and the
+    # answer is "no data yet" rather than a SQL error about a missing table.
+    catalog.initialize()
+    health = library_health(catalog, since=since, harness=args.harness, limit=args.limit)
+    quality = routing_quality(catalog, since=since, harness=args.harness)
+    harnesses = harness_breakdown(catalog, since=since)
+    if args.as_json:
+        print_json(
+            {
+                "since": since,
+                "harness": args.harness,
+                "library": health.to_dict(),
+                "quality": quality.to_dict(),
+                "harnesses": [item.to_dict() for item in harnesses],
+            }
+        )
+        return
+    print(render_stats(health, quality, harnesses, since=args.since))
 
 
 def cmd_ui(args: argparse.Namespace) -> None:

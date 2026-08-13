@@ -925,3 +925,51 @@ def test_harness_doctor_exits_nonzero_when_a_probe_fails(tmp_path: Path) -> None
     # Either the harness is absent here (probe skipped) or the probe ran and
     # failed against a nonexistent entrypoint; both are correct, neither is ok.
     assert statuses["server"] in {STATUS_FAIL, "skip"}
+
+
+
+def test_stats_renders_all_three_families(
+    tmp_path: Path, fixture_skills_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    main(["--catalog", str(catalog_path), "route", "python testing help"])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "stats"])
+    out = capsys.readouterr().out
+    assert "Routes" in out
+    assert "Library:" in out
+    assert "By harness:" in out
+
+
+def test_stats_json_is_machine_readable(
+    tmp_path: Path, fixture_skills_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(fixture_skills_root)])
+    main(["--catalog", str(catalog_path), "route", "python testing help"])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "stats", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["quality"]["routes"] == 1
+    assert payload["library"]["total_skills"] > 0
+
+
+def test_stats_rejects_an_unparseable_since(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="Cannot parse --since"):
+        main(
+            [
+                "--catalog",
+                str(tmp_path / "catalog.db"),
+                "stats",
+                "--since",
+                "last tuesday",
+            ]
+        )
+
+
+def test_stats_on_an_empty_catalog_reports_zero_rather_than_crashing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    main(["--catalog", str(tmp_path / "catalog.db"), "stats"])
+    assert "Routes: 0" in capsys.readouterr().out
