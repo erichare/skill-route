@@ -77,6 +77,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The npm release job publishes via npm trusted publishing (OIDC) instead of a
+  long-lived `NPM_TOKEN` secret, so there is no static credential in repo
+  secrets to leak or rotate, and provenance attestations are generated
+  automatically. Requires `id-token: write` and npm ≥ 11.5.1, which Node 22 does
+  not bundle — the job upgrades npm explicitly.
+- The release workflow now fails if the pushed tag disagrees with the version in
+  `pyproject.toml` or `mcp/package.json`. The published version comes from
+  package metadata rather than the tag, so tagging `v0.2.0` against a `0.1.0`
+  pyproject would have published `0.1.0` under a release titled `v0.2.0` — and
+  a PyPI version can never be reused, so there is no clean recovery.
 - Skill discovery is derived from the harness manifests instead of a hardcoded
   three-entry tuple, growing from 3 roots to 10 — including `~/.claude/skills`,
   which v0.1 never scanned.
