@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`fastapi` and `uvicorn` moved to a `ui` extra; a plain install now has zero
+  runtime dependencies.** They are used only by `skillroute ui`, which imports
+  them lazily, so every other command was paying for them. The cost was not
+  abstract: `fastapi` pulls `pydantic-core`, a Rust extension, so a Homebrew
+  formula needed a Rust toolchain and a from-source compile to install a tool
+  that is otherwise pure stdlib. Install the UI with `pip install
+  'skillroute[ui]'` or `uvx --from 'skillroute[ui]' skillroute ui`; `skillroute
+  ui` without it now explains that instead of raising an import error. The
+  `dev` extra includes `ui`, so nothing changes for contributors.
+
+### Changed
+
 - The default catalog is now `~/.skillroute/catalog.db` instead of
   `.skillroute/catalog.db` under the working directory. v0.1 and v0.2 resolved
   it against a checkout, which was fine when a git clone was the only way to run

@@ -8,6 +8,17 @@ import webbrowser
 from pathlib import Path
 from typing import Any
 
+# These live in the `ui` extra, so importing this module without it fails --
+# by design. The ImportError is deliberately left to propagate: a library
+# caller should see the ordinary Python error naming the missing package, and
+# `cmd_ui` catches it to print install instructions for a CLI user. Raising
+# SystemExit here instead would kill an embedding process and hide the cause.
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
 import skillroute
 from skillroute.atlas import (
     build_atlas_payload,
@@ -19,18 +30,6 @@ from skillroute.backends import backend_from_name
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.context import REPO_ROOT_ENV, allowed_repo_root, resolve_repo_within
 from skillroute.routing import Router
-
-try:
-    import uvicorn
-    from fastapi import FastAPI, HTTPException
-    from fastapi.responses import FileResponse
-    from fastapi.staticfiles import StaticFiles
-    from pydantic import BaseModel, Field
-except ImportError as exc:  # pragma: no cover - exercised only in misconfigured installs.
-    raise SystemExit(
-        "The SkillRoute UI requires FastAPI and Uvicorn. "
-        "Run `uv sync --extra dev` or reinstall SkillRoute."
-    ) from exc
 
 
 class RoutePreviewRequest(BaseModel):

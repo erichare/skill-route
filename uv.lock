@@ -680,17 +680,19 @@ wheels = [
 name = "skillroute"
 version = "0.2.0"
 source = { editable = "." }
-dependencies = [
-    { name = "fastapi" },
-    { name = "uvicorn" },
-]
 
 [package.optional-dependencies]
 dev = [
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "uvicorn" },
+]
+ui = [
+    { name = "fastapi" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -700,14 +702,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "fastapi", marker = "extra == 'ui'", specifier = ">=0.141.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.2" },
-    { name = "uvicorn", specifier = ">=0.52.1" },
+    { name = "skillroute", extras = ["ui"], marker = "extra == 'dev'" },
+    { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.52.1" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["ui", "dev"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest-cov", specifier = ">=7.1.0" }]

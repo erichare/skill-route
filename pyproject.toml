@@ -17,17 +17,24 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Typing :: Typed",
 ]
-dependencies = [
+# Deliberately empty. Routing, indexing, search, stats, and harness setup are
+# stdlib-only; fastapi and uvicorn are needed by `skillroute ui` alone and live
+# in the `ui` extra so a plain install stays dependency-free. This is not
+# cosmetic: fastapi pulls pydantic-core, a Rust extension, which every install
+# that never opens the UI would otherwise have to fetch or compile.
+dependencies = []
+
+[project.optional-dependencies]
+ui = [
     "fastapi>=0.141.1",
     "uvicorn>=0.52.1",
 ]
-
-[project.optional-dependencies]
 dev = [
     "httpx>=0.27.0",
     "mypy>=2.3.0",
     "pytest>=8.0.0",
     "ruff>=0.16.2",
+    "skillroute[ui]",
 ]
 
 [project.urls]
