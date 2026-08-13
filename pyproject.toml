@@ -31,10 +31,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/erichare/skill-route"
-Repository = "https://github.com/erichare/skill-route"
-Issues = "https://github.com/erichare/skill-route/issues"
-Changelog = "https://github.com/erichare/skill-route/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/erichare/skillroute"
+Repository = "https://github.com/erichare/skillroute"
+Issues = "https://github.com/erichare/skillroute/issues"
+Changelog = "https://github.com/erichare/skillroute/blob/main/CHANGELOG.md"
 
 [project.scripts]
 skillroute = "skillroute.cli:main"
