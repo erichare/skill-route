@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${SKILLROUTE_REPO_URL:-https://github.com/erichare/skill-route.git}"
+REPO_URL="${SKILLROUTE_REPO_URL:-https://github.com/erichare/skillroute.git}"
 REF="${SKILLROUTE_REF:-main}"
 INSTALL_DIR="${SKILLROUTE_INSTALL_DIR:-}"
 ASSUME_YES="${SKILLROUTE_ASSUME_YES:-0}"
@@ -31,7 +31,7 @@ SkillRoute installer
 
 Usage:
   scripts/install.sh [options]
-  curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash
 
 Options:
   --yes                 Accept prompts, including detected client setup.
@@ -284,7 +284,15 @@ main() {
     using_current=1
   fi
   if [[ -z "$INSTALL_DIR" ]]; then
-    INSTALL_DIR="$HOME/.skillroute/skill-route"
+    # The repo was renamed skill-route -> skillroute. Keep using an existing
+    # checkout at the old path rather than cloning a second copy: installs from
+    # before the rename have generated MCP configs pointing into it, and those
+    # would silently keep running the stale clone.
+    if [[ -d "$HOME/.skillroute/skill-route" ]]; then
+      INSTALL_DIR="$HOME/.skillroute/skill-route"
+    else
+      INSTALL_DIR="$HOME/.skillroute/skillroute"
+    fi
   fi
   say "Install:    $INSTALL_DIR"
 

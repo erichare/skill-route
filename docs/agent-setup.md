@@ -8,11 +8,11 @@ requests without a hosted service.
 For a fresh SkillRoute install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash
 ```
 
 The installer confirms each step, installs SkillRoute into
-`~/.skillroute/skill-route` by default, builds the MCP server, indexes starter
+`~/.skillroute/skillroute` by default (an existing `skill-route` checkout is reused), builds the MCP server, indexes starter
 skills, detects supported agent clients, and offers setup for each detected
 client. JSON config edits preserve unrelated servers and create timestamped
 backups.
@@ -20,19 +20,19 @@ backups.
 For unattended use:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash -s -- --yes
 ```
 
 Useful installer options:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh \
   | SKILLROUTE_INSTALL_DIR=/opt/skillroute bash
 
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh \
   | bash -s -- --clients codex,claude-code,vscode --yes
 
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh \
   | SKILLROUTE_CLIENT_SETUP=0 bash
 ```
 

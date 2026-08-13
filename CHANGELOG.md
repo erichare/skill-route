@@ -82,8 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The npm release job publishes via npm trusted publishing (OIDC) instead of a
   long-lived `NPM_TOKEN` secret, so there is no static credential in repo
   secrets to leak or rotate, and provenance attestations are generated
-  automatically. Requires `id-token: write` and npm ≥ 11.5.1, which Node 22 does
-  not bundle — the job upgrades npm explicitly.
+  automatically. Requires `id-token: write` and npm ≥ 11.5.1; the job runs on
+  Node 24, whose bundled npm clears that floor without an install step (Node 22
+  still bundles npm 10.x at its latest patch).
 - The release workflow now fails if the pushed tag disagrees with the version in
   `pyproject.toml` or `mcp/package.json`. The published version comes from
   package metadata rather than the tag, so tagging `v0.2.0` against a `0.1.0`
@@ -118,8 +119,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolve inside it (CodeQL `py/path-injection`). The bundled UI never sent
   `repo`, and the CLI's `--repo` is unaffected.
 
-[Unreleased]: https://github.com/erichare/skill-route/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/erichare/skill-route/compare/v0.1.0...v0.2.0
+[Unreleased]: https://github.com/erichare/skillroute/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/erichare/skillroute/compare/v0.1.0...v0.2.0
 
 ## [0.1.0] - 2026-08-10
 
@@ -143,4 +144,4 @@ First release.
   `skillroute.search`, and `skillroute.inspect_skill`, with client setup via
   `skillroute mcp config --client <client>`
 
-[0.1.0]: https://github.com/erichare/skill-route/releases/tag/v0.1.0
+[0.1.0]: https://github.com/erichare/skillroute/releases/tag/v0.1.0

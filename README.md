@@ -7,7 +7,7 @@
 Index full `SKILL.md` bundles into a local catalog, route any request to ranked
 skills with confidence and evidence, and serve it all to your agents over MCP.
 
-[![CI](https://img.shields.io/github/actions/workflow/status/erichare/skill-route/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/erichare/skill-route/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/erichare/skillroute/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/erichare/skillroute/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
 [![MCP](https://img.shields.io/badge/MCP-stdio%20server-8A2BE2?style=flat-square)](docs/mcp-server.md)
@@ -43,7 +43,7 @@ One guided line (confirms each step, sets up detected agent clients with
 backups):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash
 ```
 
 Or hands-on, in a checkout:

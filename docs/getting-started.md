@@ -8,18 +8,18 @@ skills.
 One-line SkillRoute installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash
 ```
 
 The installer confirms each step before it clones or updates SkillRoute,
 installs dependencies, builds the MCP server and Skill Atlas web UI, indexes
 starter skills, detects supported agent clients, and offers setup for each
-detected client. It installs to `~/.skillroute/skill-route` by default.
+detected client. It installs to `~/.skillroute/skillroute` by default, reusing an existing `skill-route` checkout if one is present.
 
 For unattended local/dev use:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erichare/skill-route/main/scripts/install.sh | bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash -s -- --yes
 ```
 
 Already in a checkout:

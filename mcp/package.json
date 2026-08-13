@@ -4,14 +4,14 @@
   "description": "SkillRoute MCP stdio server",
   "license": "MIT",
   "author": "Eric Hare",
-  "homepage": "https://github.com/erichare/skill-route#readme",
+  "homepage": "https://github.com/erichare/skillroute#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/erichare/skill-route.git",
+    "url": "git+https://github.com/erichare/skillroute.git",
     "directory": "mcp"
   },
   "bugs": {
-    "url": "https://github.com/erichare/skill-route/issues"
+    "url": "https://github.com/erichare/skillroute/issues"
   },
   "keywords": [
     "mcp",
