@@ -885,8 +885,23 @@ def cmd_stats(args: argparse.Namespace) -> None:
     print(render_stats(health, quality, harnesses, since=args.since))
 
 
+UI_EXTRA_MISSING = (
+    "The Skill Atlas UI needs the `ui` extra, which is not installed.\n"
+    "  uv:   uv pip install 'skillroute[ui]'\n"
+    "  pip:  pip install 'skillroute[ui]'\n"
+    "  uvx:  uvx --from 'skillroute[ui]' skillroute ui\n"
+    "Everything else (route, index, search, stats, harness) needs no extras."
+)
+
+
 def cmd_ui(args: argparse.Namespace) -> None:
-    from skillroute.ui_server import run_ui
+    # Imported here, not at module scope, so the whole CLI does not depend on
+    # fastapi being installed. A missing extra should read as a missing extra,
+    # not as a traceback about a module nobody asked the user to install.
+    try:
+        from skillroute.ui_server import run_ui
+    except ImportError as exc:
+        raise SystemExit(UI_EXTRA_MISSING) from exc
 
     run_ui(
         catalog_path=args.catalog,

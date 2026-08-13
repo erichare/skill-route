@@ -35,7 +35,7 @@ commands for supported clients.
 Manual setup is also supported:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev   # dev includes the `ui` extra
 npm --prefix mcp ci
 npm --prefix mcp run build
 npm --prefix web ci

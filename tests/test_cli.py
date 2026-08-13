@@ -973,3 +973,21 @@ def test_stats_on_an_empty_catalog_reports_zero_rather_than_crashing(
 ) -> None:
     main(["--catalog", str(tmp_path / "catalog.db"), "stats"])
     assert "Routes: 0" in capsys.readouterr().out
+
+
+def test_ui_reports_a_missing_extra_instead_of_an_import_traceback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """fastapi/uvicorn live in the `ui` extra, so this path is reachable."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fail_ui_server(name: str, *args: object, **kwargs: object) -> object:
+        if name == "skillroute.ui_server":
+            raise ImportError("No module named 'fastapi'")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", fail_ui_server)
+    with pytest.raises(SystemExit, match=r"skillroute\[ui\]"):
+        main(["--catalog", str(tmp_path / "c.db"), "ui", "--no-open"])

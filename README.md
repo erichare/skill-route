@@ -177,7 +177,7 @@ flowchart LR
 ## Development
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev   # dev includes the `ui` extra
 uv run --extra dev pytest --cov=skillroute
 uv run --extra dev ruff check . && uv run --extra dev mypy
 ```
