@@ -123,17 +123,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      # Trusted publishing needs npm >= 11.5.1. Node 22 bundles npm 10.x even at
+      # its latest patch, so it cannot be used here; Node 24 bundles 11.17+,
+      # which clears the floor without installing anything.
+      #
+      # Do not "fix" this by adding `npm install -g npm@latest` on Node 22: that
+      # is what v0.2.0's first release attempt did, and it failed with
+      # EBADENGINE because npm 12 requires Node ^22.22.2 || ^24.15.0 while
+      # setup-node had pinned 22.14.0.
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22.14.0"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
-
-      # Trusted publishing needs npm >= 11.5.1, and Node 22 still bundles npm
-      # 10.x. Without this the publish fails on a message that does not mention
-      # the npm version at all.
-      - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@latest
 
       - name: Publish
         working-directory: mcp
