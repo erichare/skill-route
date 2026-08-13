@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The default catalog is now `~/.skillroute/catalog.db` instead of
+  `.skillroute/catalog.db` under the working directory. v0.1 and v0.2 resolved
+  it against a checkout, which was fine when a git clone was the only way to run
+  SkillRoute; since 0.2 publishes to PyPI and npm, `uvx skillroute` has no
+  checkout and a checkout-relative default names a directory that does not
+  exist. An **existing** project catalog still wins, so anyone who indexed into
+  their checkout keeps using it rather than finding an empty library.
+  `--catalog` and `SKILLROUTE_CATALOG_PATH` are unchanged and still take
+  precedence.
+- Generated configs for a published server (`--server-source npx`) now point at
+  the user catalog rather than resolving one against the checkout that happened
+  to generate them. This was the last checkout-bound path in an npx config.
+
 ### Added
 
 - `skillroute stats` and a `skillroute.analytics` module answering three
@@ -124,8 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `skillroute harness install`. Output is unchanged and the deprecation
   notice goes to stderr, so `--json` stdout stays machine-parseable. The
   `skillroute.client_setup` and `skillroute.mcp_setup` modules are now shims
-  re-exporting `skillroute.harness_setup` and `skillroute.harness_render`. All
-  are removed in 0.3.
+  re-exporting `skillroute.harness_setup` and `skillroute.harness_render`. They
+  are removed in a later release; 0.3 keeps them.
 
 ### Security
 
