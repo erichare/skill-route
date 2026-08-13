@@ -1,0 +1,22 @@
+schema = 1
+id = "ibm-bob"
+display_name = "IBM Bob"
+tier = "breadth"
+homepage = "https://www.ibm.com/products/bob"
+
+[detect]
+commands = []
+client_names = ["ibm-bob", "bob"]
+paths.all = ["~/.bob/mcp.json"]
+apps.macos = ["/Applications/IBM Bob.app"]
+
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "~/.bob/mcp.json or .bob/mcp.json"
+write_path.all = "~/.bob/mcp.json"
+
+[modes.mcp.extra]
+cwd = "{repo_root}"
+disabled = false

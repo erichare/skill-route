@@ -5,6 +5,7 @@ import json
 import sys
 from collections.abc import Callable
 from contextlib import nullcontext
+from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -22,6 +23,17 @@ from skillroute.backends import (
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
+from skillroute.harness_render import (
+    build_harness_setup,
+    default_repo_root,
+    render_harness_setup,
+)
+from skillroute.harness_setup import (
+    apply_harness_setup,
+    detect_harnesses,
+    print_detection_summary,
+)
+from skillroute.harnesses import PLATFORMS, harness_ids, load_manifests
 from skillroute.mcp_setup import (
     CLAUDE_SCOPE_CHOICES,
     MCP_CLIENT_CHOICES,
@@ -36,6 +48,10 @@ from skillroute.metadata import (
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
 from skillroute.tuning import tune_weights
+
+# Resolved once at import so argparse `choices` stay in sync with the manifests
+# on disk without every subparser reloading them.
+HARNESS_IDS = harness_ids()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -247,6 +263,54 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mcp_config_parser.add_argument("--json", action="store_true", dest="as_json")
     mcp_config_parser.set_defaults(func=cmd_mcp_config)
+
+    harness_parser = subparsers.add_parser(
+        "harness", help="Inspect and configure agent harnesses"
+    )
+    harness_subparsers = harness_parser.add_subparsers(dest="harness_command", required=True)
+
+    harness_list_parser = harness_subparsers.add_parser(
+        "list", help="List every harness SkillRoute knows about"
+    )
+    harness_list_parser.add_argument("--mode", default=None, help="Only harnesses supporting MODE")
+    harness_list_parser.add_argument("--json", action="store_true", dest="as_json")
+    harness_list_parser.set_defaults(func=cmd_harness_list)
+
+    harness_detect_parser = harness_subparsers.add_parser(
+        "detect", help="Detect which harnesses are installed"
+    )
+    harness_detect_parser.add_argument("--json", action="store_true", dest="as_json")
+    harness_detect_parser.set_defaults(func=cmd_harness_detect)
+
+    harness_show_parser = harness_subparsers.add_parser(
+        "show", help="Show the setup SkillRoute would apply for one harness"
+    )
+    harness_show_parser.add_argument("harness", choices=HARNESS_IDS)
+    harness_show_parser.add_argument("--mode", default="mcp")
+    harness_show_parser.add_argument("--scope", default=None)
+    harness_show_parser.add_argument("--repo-root", type=Path, default=None)
+    harness_show_parser.add_argument("--server-name", default="skillroute")
+    harness_show_parser.add_argument(
+        "--platform", choices=PLATFORMS, default=None, help="Render for another platform"
+    )
+    add_backend_argument(harness_show_parser)
+    harness_show_parser.add_argument("--json", action="store_true", dest="as_json")
+    harness_show_parser.set_defaults(func=cmd_harness_show)
+
+    harness_install_parser = harness_subparsers.add_parser(
+        "install", help="Configure a harness to use SkillRoute"
+    )
+    harness_install_parser.add_argument("harness", choices=HARNESS_IDS)
+    harness_install_parser.add_argument("--mode", default="mcp")
+    harness_install_parser.add_argument("--scope", default=None)
+    harness_install_parser.add_argument("--repo-root", type=Path, default=None)
+    harness_install_parser.add_argument("--server-name", default="skillroute")
+    add_backend_argument(harness_install_parser)
+    harness_install_parser.add_argument(
+        "--dry-run", action="store_true", help="Print what would be done, change nothing"
+    )
+    harness_install_parser.add_argument("--yes", action="store_true")
+    harness_install_parser.set_defaults(func=cmd_harness_install)
 
     ui_parser = subparsers.add_parser("ui", help="Launch the local Skill Atlas web UI")
     ui_parser.add_argument("--host", default="127.0.0.1")
@@ -588,6 +652,13 @@ def cmd_backend_astra_search(args: argparse.Namespace) -> None:
 
 
 def cmd_mcp_config(args: argparse.Namespace) -> None:
+    # Deprecation goes to stderr so `--json` stdout stays parseable.
+    print(
+        "skillroute: `mcp config --client` is deprecated; use "
+        f"`skillroute harness show {args.client}` (or `harness install`). "
+        "It will be removed in 0.3.",
+        file=sys.stderr,
+    )
     payload = build_mcp_setup(
         client=args.client,
         repo_root=args.repo_root,
@@ -600,6 +671,94 @@ def cmd_mcp_config(args: argparse.Namespace) -> None:
         print_json(payload)
         return
     print(render_mcp_setup(payload))
+
+
+def cmd_harness_list(args: argparse.Namespace) -> None:
+    manifests = [
+        manifest
+        for manifest in load_manifests().values()
+        if not args.mode or manifest.supports(args.mode)
+    ]
+    if args.as_json:
+        print_json(
+            [
+                {
+                    "id": manifest.id,
+                    "name": manifest.display_name,
+                    "tier": manifest.tier,
+                    "homepage": manifest.homepage,
+                    "modes": sorted(manifest.modes),
+                }
+                for manifest in manifests
+            ]
+        )
+        return
+    if not manifests:
+        print(f"No harnesses support mode {args.mode!r}.")
+        return
+    width = max(len(manifest.id) for manifest in manifests)
+    for manifest in manifests:
+        modes = " ".join(sorted(manifest.modes))
+        print(f"{manifest.id:<{width}}  {manifest.tier:<12}  {modes}")
+
+
+def cmd_harness_detect(args: argparse.Namespace) -> None:
+    detections = detect_harnesses()
+    if args.as_json:
+        print_json([asdict(detection) for detection in detections])
+        return
+    print_detection_summary(detections)
+
+
+def cmd_harness_show(args: argparse.Namespace) -> None:
+    payload = build_harness_setup(
+        harness=args.harness,
+        mode=args.mode,
+        repo_root=args.repo_root,
+        catalog=args.catalog,
+        backend=args.backend,
+        server_name=args.server_name,
+        scope=args.scope,
+        platform=args.platform,
+    )
+    if args.as_json:
+        print_json(payload)
+        return
+    print(render_harness_setup(payload))
+
+
+def cmd_harness_install(args: argparse.Namespace) -> None:
+    repo_root = (args.repo_root or default_repo_root()).expanduser().resolve()
+    payload = build_harness_setup(
+        harness=args.harness,
+        mode=args.mode,
+        repo_root=repo_root,
+        catalog=args.catalog,
+        backend=args.backend,
+        server_name=args.server_name,
+        scope=args.scope,
+    )
+    if args.dry_run:
+        print(render_harness_setup(payload))
+        return
+    detection = next(
+        (item for item in detect_harnesses() if item.id == args.harness), None
+    )
+    if detection is None:
+        raise SystemExit(f"Unknown harness: {args.harness}")
+    result = apply_harness_setup(
+        detection,
+        repo_root=repo_root,
+        catalog=args.catalog,
+        backend=args.backend,
+        server_name=args.server_name,
+        mode="1" if args.yes else "prompt",
+        yes=args.yes,
+        install_mode=args.mode,
+    )
+    print(f"{detection.name}: {result.status} - {result.message}")
+    if result.backup_path:
+        print(f"{detection.name}: backup - {result.backup_path}")
 
 
 def cmd_ui(args: argparse.Namespace) -> None:

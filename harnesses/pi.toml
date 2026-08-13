@@ -1,0 +1,41 @@
+schema = 1
+id = "pi"
+display_name = "Pi"
+tier = "first-party"
+homepage = "https://pi.dev"
+
+[detect]
+commands = ["pi"]
+client_names = ["pi", "pi-coding-agent"]
+paths.all = ["~/.pi/agent/settings.json"]
+
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "~/.pi/agent/mcp.json"
+write_path.all = "~/.pi/agent/mcp.json"
+scope_paths.project = ".pi/mcp.json"
+scopes = ["user", "project"]
+default_scope = "user"
+
+[modes.skills]
+setup_method = "dir_sync"
+dir.all = "~/.pi/agent/skills"
+project_dir = ".pi/skills"
+discovery = ["~/.pi/agent/skills", ".pi/skills"]
+# Pi's settings declare where skills load from, so SkillRoute can register a
+# directory instead of copying bundles into Pi's own.
+register_in.path = "~/.pi/agent/settings.json"
+register_in.key = "skills"
+
+[modes.extension]
+setup_method = "package"
+config_path = "~/.pi/agent/extensions"
+write_path.all = "~/.pi/agent/extensions"
+notes = ["Pi extensions are TypeScript files or directories under the extensions path."]
+
+[modes.router_skill]
+setup_method = "dir_sync"
+dir.all = "~/.pi/agent/skills/skillroute"
+project_dir = ".pi/skills/skillroute"

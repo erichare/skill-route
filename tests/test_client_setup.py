@@ -19,6 +19,7 @@ from skillroute.client_setup import (
     run_setup_command,
     select_clients,
 )
+from skillroute.harnesses import harness_ids
 
 
 def test_detect_clients_uses_commands_and_paths(tmp_path: Path) -> None:
@@ -36,6 +37,9 @@ def test_detect_clients_uses_commands_and_paths(tmp_path: Path) -> None:
             "cursor": "/usr/local/bin/cursor",
         },
         existing_paths={bob_config, Path("/Applications/Claude.app"), windsurf_config},
+        # Detection is per-platform now, and /Applications/*.app only counts on
+        # macOS. v0.1 checked those paths on every platform.
+        platform="macos",
     )
 
     detections = {detection.id: detection for detection in detect_clients(env)}
@@ -59,7 +63,7 @@ def test_select_clients_auto_all_and_requested(tmp_path: Path) -> None:
 
     assert [detection.id for detection in select_clients("auto", detections)] == ["codex"]
     assert [detection.id for detection in select_clients("codex,cursor", detections)] == ["codex", "cursor"]
-    assert len(select_clients("all", detections)) == 7
+    assert len(select_clients("all", detections)) == len(harness_ids())
     with pytest.raises(SystemExit):
         select_clients("not-a-client", detections)
 
@@ -120,7 +124,7 @@ def test_apply_vscode_setup_uses_detected_command(
         calls.append((command_parts, check))
         return subprocess.CompletedProcess(command_parts, 0)
 
-    monkeypatch.setattr("skillroute.client_setup.subprocess.run", fake_run)
+    monkeypatch.setattr("skillroute.harness_setup.subprocess.run", fake_run)
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     detection = ClientDetection(
@@ -152,7 +156,7 @@ def test_apply_missing_command_client_skips_without_running(
     def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise AssertionError("subprocess.run should not be called for a missing command client")
 
-    monkeypatch.setattr("skillroute.client_setup.subprocess.run", fake_run)
+    monkeypatch.setattr("skillroute.harness_setup.subprocess.run", fake_run)
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     detection = ClientDetection(
@@ -189,13 +193,13 @@ def test_setup_command_skips_prompt_mode_without_tty(
         command="/bin/codex",
     )
 
-    monkeypatch.setattr("skillroute.client_setup.detect_clients", lambda _env: [detection])
-    monkeypatch.setattr("skillroute.client_setup.can_prompt", lambda: False)
+    monkeypatch.setattr("skillroute.harness_setup.detect_harnesses", lambda _env: [detection])
+    monkeypatch.setattr("skillroute.harness_setup.can_prompt", lambda: False)
 
     def fail_setup(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("client setup should not run without a promptable terminal")
 
-    monkeypatch.setattr("skillroute.client_setup.apply_client_setup", fail_setup)
+    monkeypatch.setattr("skillroute.harness_setup.apply_harness_setup", fail_setup)
 
     run_setup_command(
         Namespace(
@@ -274,7 +278,10 @@ def test_run_detect_command_json_lists_all_clients(capsys: pytest.CaptureFixture
     run_detect_command(Namespace(as_json=True))
 
     payload = json.loads(capsys.readouterr().out)
-    assert {entry["id"] for entry in payload} == {
+    # Every harness with a manifest is listed, and the seven v0.1 clients are
+    # still among them.
+    assert {entry["id"] for entry in payload} == set(harness_ids())
+    assert {
         "ibm-bob",
         "codex",
         "claude-code",
@@ -282,7 +289,7 @@ def test_run_detect_command_json_lists_all_clients(capsys: pytest.CaptureFixture
         "vscode",
         "windsurf",
         "cursor",
-    }
+    } <= {entry["id"] for entry in payload}
 
 
 def test_client_setup_module_main_detect_json(capsys: pytest.CaptureFixture[str]) -> None:

@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Harness packs.** Every agent tool SkillRoute supports is now one declarative
+  manifest in `harnesses/*.toml` describing detection, per-platform config paths,
+  and which install modes it offers. v0.1 encoded this as a hardcoded if/elif
+  chain plus a per-client detection function, so adding a tool meant editing
+  around seven places across two modules and three docs; adding one that fits an
+  existing config shape is now a data change with no Python. Six of the fourteen
+  shipped harnesses reuse the same shape unchanged. `tests/test_harnesses.py` is
+  parametrized over whatever is in `harnesses/`, so a new manifest is covered
+  automatically.
+- Seven new harnesses: `pi`, `hermes`, `opencode`, `goose`, `gemini-cli`, `zed`,
+  and `amp` — joining the seven from v0.1, all migrated to manifests with
+  byte-identical generated output.
+- Install modes beyond MCP: `acp`, `skills` (native skills-directory discovery
+  and projection), `hook`, `extension`, and `router_skill`. Where a harness lets
+  you register an extra skills directory (Hermes `external_dirs`, Pi's settings),
+  SkillRoute registers rather than copying — no duplication, no sync drift.
+- Cross-platform config paths. Manifests declare `macos`/`linux`/`windows`
+  variants and the most specific match wins; `skillroute harness show --platform`
+  renders for a platform you are not on. v0.1 detection was macOS-only.
+- `skillroute harness list | detect | show | install`, plus
+  [docs/harnesses.md](docs/harnesses.md) covering how to add a harness.
 - Catalog schema v2 with real migration machinery. `skillroute.migrations`
   defines ordered, named migrations; `Catalog.initialize()` detects the on-disk
   version, takes a write lock (`BEGIN IMMEDIATE`) so a concurrent index and UI
@@ -32,11 +53,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Skill discovery is derived from the harness manifests instead of a hardcoded
+  three-entry tuple, growing from 3 roots to 10 — including `~/.claude/skills`,
+  which v0.1 never scanned.
 - Raw route-trace retention raised from 1,000 to 20,000, configurable via
   `SKILLROUTE_MAX_TRACES` (`0` disables pruning). 1,000 rows was a few days of
   one active harness — too short a horizon for any question about change over
   time. Pruning is now amortized across inserts rather than run on every one, so
   the table may sit slightly above the cap between prunes.
+
+### Deprecated
+
+- `skillroute mcp config --client <id>` in favour of `skillroute harness show`
+  and `skillroute harness install`. Output is unchanged and the deprecation
+  notice goes to stderr, so `--json` stdout stays machine-parseable. The
+  `skillroute.client_setup` and `skillroute.mcp_setup` modules are now shims
+  re-exporting `skillroute.harness_setup` and `skillroute.harness_render`. All
+  are removed in 0.3.
 
 ### Added
 

@@ -1,0 +1,19 @@
+schema = 1
+id = "cursor"
+display_name = "Cursor"
+tier = "breadth"
+homepage = "https://cursor.com/docs/context/mcp"
+
+[detect]
+commands = ["cursor"]
+client_names = ["cursor", "cursor-*"]
+paths.all = ["~/.cursor/mcp.json"]
+apps.macos = ["/Applications/Cursor.app"]
+
+[modes.mcp]
+setup_method = "print_only"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "Cursor MCP settings"
+write_path.all = "~/.cursor/mcp.json"
+notes = ["Cursor setup is snippet-only until a stable official write target is confirmed."]
