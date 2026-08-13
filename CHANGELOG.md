@@ -7,32 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **`fastapi` and `uvicorn` moved to a `ui` extra; a plain install now has zero
-  runtime dependencies.** They are used only by `skillroute ui`, which imports
-  them lazily, so every other command was paying for them. The cost was not
-  abstract: `fastapi` pulls `pydantic-core`, a Rust extension, so a Homebrew
-  formula needed a Rust toolchain and a from-source compile to install a tool
-  that is otherwise pure stdlib. Install the UI with `pip install
-  'skillroute[ui]'` or `uvx --from 'skillroute[ui]' skillroute ui`; `skillroute
-  ui` without it now explains that instead of raising an import error. The
-  `dev` extra includes `ui`, so nothing changes for contributors.
-
-### Changed
-
-- The default catalog is now `~/.skillroute/catalog.db` instead of
-  `.skillroute/catalog.db` under the working directory. v0.1 and v0.2 resolved
-  it against a checkout, which was fine when a git clone was the only way to run
-  SkillRoute; since 0.2 publishes to PyPI and npm, `uvx skillroute` has no
-  checkout and a checkout-relative default names a directory that does not
-  exist. An **existing** project catalog still wins, so anyone who indexed into
-  their checkout keeps using it rather than finding an empty library.
-  `--catalog` and `SKILLROUTE_CATALOG_PATH` are unchanged and still take
-  precedence.
-- Generated configs for a published server (`--server-source npx`) now point at
-  the user catalog rather than resolving one against the checkout that happened
-  to generate them. This was the last checkout-bound path in an npx config.
+## [0.3.0] - 2026-08-13
 
 ### Added
 
@@ -48,10 +23,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `--json` emits the same numbers for tooling. Routes with no recorded
   harness are reported as `unknown` rather than dropped.
 
+### Changed
+
+- **`fastapi` and `uvicorn` moved to a `ui` extra; a plain install now has zero
+  runtime dependencies.** They are used only by `skillroute ui`, which imports
+  them lazily, so every other command was paying for them. The cost was not
+  abstract: `fastapi` pulls `pydantic-core`, a Rust extension, so a Homebrew
+  formula needed a Rust toolchain and a from-source compile to install a tool
+  that is otherwise pure stdlib. Install the UI with `pip install
+  'skillroute[ui]'` or `uvx --from 'skillroute[ui]' skillroute ui`; `skillroute
+  ui` without it now explains that instead of raising an import error. The
+  `dev` extra includes `ui`, so nothing changes for contributors.
+- The default catalog is now `~/.skillroute/catalog.db` instead of
+  `.skillroute/catalog.db` under the working directory. v0.1 and v0.2 resolved
+  it against a checkout, which was fine when a git clone was the only way to run
+  SkillRoute; since 0.2 publishes to PyPI and npm, `uvx skillroute` has no
+  checkout and a checkout-relative default names a directory that does not
+  exist. An **existing** project catalog still wins, so anyone who indexed into
+  their checkout keeps using it rather than finding an empty library.
+  `--catalog` and `SKILLROUTE_CATALOG_PATH` are unchanged and still take
+  precedence.
+- Generated configs for a published server (`--server-source npx`) now point at
+  the user catalog rather than resolving one against the checkout that happened
+  to generate them. This was the last checkout-bound path in an npx config.
+
 ### Fixed
 
 - `skillroute stats` on a catalog that was never indexed reports zero routes
   instead of failing with a missing-table SQL error.
+
+[Unreleased]: https://github.com/erichare/skillroute/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/erichare/skillroute/compare/v0.2.0...v0.3.0
 
 ## [0.2.0] - 2026-08-13
 
@@ -165,7 +167,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolve inside it (CodeQL `py/path-injection`). The bundled UI never sent
   `repo`, and the CLI's `--repo` is unaffected.
 
-[Unreleased]: https://github.com/erichare/skillroute/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/erichare/skillroute/compare/v0.1.0...v0.2.0
 
 ## [0.1.0] - 2026-08-10
