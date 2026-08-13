@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import skillroute
+from skillroute.attribution import resolve_attribution
 from skillroute.backends import (
     BACKEND_CHOICES,
     AstraDataAPIBackend,
@@ -64,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
     route_parser.add_argument("request")
     route_parser.add_argument("--repo", type=Path, default=None)
     route_parser.add_argument("--limit", type=int, default=5)
+    route_parser.add_argument(
+        "--harness",
+        default=None,
+        help="Attribute this route to a harness (defaults to $SKILLROUTE_HARNESS)",
+    )
     add_backend_argument(route_parser)
     route_parser.add_argument("--json", action="store_true", dest="as_json")
     route_parser.set_defaults(func=cmd_route)
@@ -306,7 +312,14 @@ def cmd_index(args: argparse.Namespace) -> None:
 
 def cmd_route(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
-    response = router_from_args(catalog, args).route(args.request, repo=args.repo, limit=args.limit)
+    response = router_from_args(catalog, args).route(
+        args.request,
+        repo=args.repo,
+        limit=args.limit,
+        attribution=resolve_attribution(
+            explicit=getattr(args, "harness", None), surface="cli"
+        ),
+    )
     if args.as_json:
         print_json(response)
         return

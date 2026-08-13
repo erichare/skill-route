@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Catalog schema v2 with real migration machinery. `skillroute.migrations`
+  defines ordered, named migrations; `Catalog.initialize()` detects the on-disk
+  version, takes a write lock (`BEGIN IMMEDIATE`) so a concurrent index and UI
+  server cannot both migrate, backs the file up before altering it, and refuses
+  a catalog written by a newer SkillRoute instead of corrupting it. Existing v1
+  catalogs upgrade in place; their traces are unpacked into the new columns
+  rather than discarded.
+- Route traces now record who asked and what happened: `harness_id`,
+  `harness_version`, `surface`, `request_text`, `top_confidence`,
+  `second_confidence`, `catalog_fingerprint`, and the routing weights in effect.
+  A new `route_trace_candidates` table denormalizes every ranked candidate and
+  its score breakdown so analytics can use SQL instead of parsing response
+  blobs. `skillroute route --harness <id>` and `SKILLROUTE_HARNESS` set the
+  attribution; an unknown caller stays unknown rather than erroring.
+- `Catalog.record_outcome()` and a `route_outcomes` table, so an agent can
+  report which skill it actually used. The rank it was offered at is resolved
+  from the recorded candidates rather than trusted from the caller.
+- `route_trace_daily` aggregates every route on the day it happens. Raw traces
+  are still capped, but the rollup is not, so route counts, clarification rates,
+  and confidence distributions survive pruning and remain answerable over time.
+
+### Changed
+
+- Raw route-trace retention raised from 1,000 to 20,000, configurable via
+  `SKILLROUTE_MAX_TRACES` (`0` disables pruning). 1,000 rows was a few days of
+  one active harness — too short a horizon for any question about change over
+  time. Pruning is now amortized across inserts rather than run on every one, so
+  the table may sit slightly above the cap between prunes.
+
+### Added
+
 - SQLite FTS5 retrieval backend (`--backend fts5`, alias `sqlite-fts5`):
   local BM25 ranking with term-frequency and document-length normalization on
   top of the existing token-overlap lexical score. Query input is escaped so
