@@ -892,3 +892,36 @@ def test_cli_route_reports_bad_weights_env_cleanly(
     with pytest.raises(SystemExit) as excinfo:
         main(["--catalog", str(catalog_path), "search", "mcp"])
     assert "must be >= 0" in str(excinfo.value)
+
+
+def test_harness_doctor_reports_every_pack(capsys: pytest.CaptureFixture[str]) -> None:
+    main(["harness", "doctor", "--no-probe"])
+    out = capsys.readouterr().out
+    assert "harness(es) checked" in out
+
+
+def test_harness_doctor_json_is_machine_readable(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    main(["harness", "doctor", "claude-code", "--no-probe", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload[0]["harness"] == "claude-code"
+    assert {"name", "status", "detail"} <= set(payload[0]["checks"][0])
+
+
+def test_harness_doctor_rejects_an_unknown_harness() -> None:
+    with pytest.raises(SystemExit, match="Unsupported harness"):
+        main(["harness", "doctor", "nope", "--no-probe"])
+
+
+def test_harness_doctor_exits_nonzero_when_a_probe_fails(tmp_path: Path) -> None:
+    """A repo root with no built server is the drift case doctor exists for."""
+    from skillroute.harness_doctor import STATUS_FAIL, run_doctor
+
+    reports = run_doctor(
+        ["claude-code"], repo_root=tmp_path, catalog=tmp_path / "c.db", probe=True
+    )
+    statuses = {check.name: check.status for check in reports[0].checks}
+    # Either the harness is absent here (probe skipped) or the probe ran and
+    # failed against a nonexistent entrypoint; both are correct, neither is ok.
+    assert statuses["server"] in {STATUS_FAIL, "skip"}

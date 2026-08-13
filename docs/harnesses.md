@@ -12,6 +12,7 @@ skillroute harness detect                # what is actually installed here
 skillroute harness show pi               # what setup would look like
 skillroute harness install pi --dry-run  # print, change nothing
 skillroute harness install pi --yes      # apply it
+skillroute harness doctor pi             # prove the pack still works
 ```
 
 ## Supported harnesses
@@ -160,6 +161,45 @@ Render for another platform without being on it:
 ```bash
 skillroute harness show goose --platform windows --json
 ```
+
+## Verifying a pack: `harness doctor`
+
+Manifests encode config paths for fourteen tools that each move on their own
+schedule, and a stale path fails quietly — `harness install` reports success
+while writing to a file the tool no longer reads. `doctor` is how that stays
+honest.
+
+```bash
+skillroute harness doctor                  # every pack
+skillroute harness doctor claude-code pi   # just these
+skillroute harness doctor --no-probe       # static checks only, no subprocess
+skillroute harness doctor --json           # for CI
+```
+
+Each pack gets six kinds of check:
+
+| Check | Fails when |
+| --- | --- |
+| `manifest` | the pack declares no install modes (`unverified` tier warns) |
+| `platform` | a file-writing mode has no path for the current platform |
+| `detect` | never — an absent tool warns, since you can doctor a pack you do not use |
+| `render:<mode>` | a mode no longer renders, e.g. an unresolvable placeholder |
+| `config` | the config exists but cannot be parsed |
+| `server` | the configured server command does not answer an MCP `initialize` |
+
+The `server` check is the one that cannot be faked by inspection: it runs the
+exact command the config names, sends `initialize`, and waits for a JSON-RPC
+reply. Everything else proves the pack is *describable*; this proves it *works*.
+
+Absent and unconfigured harnesses warn rather than fail, so the command exits
+non-zero only on real breakage and is usable as a CI gate:
+
+```bash
+skillroute harness doctor --no-probe --json > packs.json || echo "a pack is broken"
+```
+
+Run it on Linux and Windows too — `platform` is what catches a pack that was
+written against macOS paths only, which is exactly how v0.1 detection went wrong.
 
 ## Migrating from `skillroute mcp config`
 

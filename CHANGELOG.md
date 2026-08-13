@@ -28,8 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform config paths. Manifests declare `macos`/`linux`/`windows`
   variants and the most specific match wins; `skillroute harness show --platform`
   renders for a platform you are not on. v0.1 detection was macOS-only.
-- `skillroute harness list | detect | show | install`, plus
+- `skillroute harness list | detect | show | install | doctor`, plus
   [docs/harnesses.md](docs/harnesses.md) covering how to add a harness.
+- `skillroute harness doctor` verifies a pack still matches reality: the manifest
+  declares a path for the current platform, every mode still renders, and the
+  config on disk names our server. It then runs the exact server command the
+  config points at and confirms it answers an MCP `initialize` handshake — the
+  one check that inspection cannot fake. Config paths for fourteen tools rot
+  silently, because `harness install` keeps reporting success while writing to a
+  file the tool no longer reads. An absent or unconfigured harness warns rather
+  than fails, so a non-zero exit means real breakage and the command works as a
+  CI gate (`--json`, `--no-probe`).
 - Catalog schema v2 with real migration machinery. `skillroute.migrations`
   defines ordered, named migrations; `Catalog.initialize()` detects the on-disk
   version, takes a write lock (`BEGIN IMMEDIATE`) so a concurrent index and UI

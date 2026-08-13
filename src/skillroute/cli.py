@@ -23,6 +23,12 @@ from skillroute.backends import (
 from skillroute.catalog import Catalog, default_catalog_path
 from skillroute.dogfood import discover_default_skill_roots, index_default_skill_roots
 from skillroute.evals import run_golden_routes
+from skillroute.harness_doctor import (
+    DEFAULT_PROBE_TIMEOUT,
+    STATUS_FAIL,
+    render_doctor_reports,
+    run_doctor,
+)
 from skillroute.harness_render import (
     build_harness_setup,
     default_repo_root,
@@ -311,6 +317,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     harness_install_parser.add_argument("--yes", action="store_true")
     harness_install_parser.set_defaults(func=cmd_harness_install)
+
+    harness_doctor_parser = harness_subparsers.add_parser(
+        "doctor", help="Verify harness packs still match reality"
+    )
+    # No `choices=`: with nargs="*" argparse renders the empty-list default into
+    # the usage line. run_doctor() validates and names the valid ids instead.
+    harness_doctor_parser.add_argument(
+        "harness",
+        nargs="*",
+        metavar="HARNESS",
+        help=f"Harnesses to check (default: all). One of: {', '.join(HARNESS_IDS)}",
+    )
+    harness_doctor_parser.add_argument("--mode", default="mcp")
+    harness_doctor_parser.add_argument("--repo-root", type=Path, default=None)
+    harness_doctor_parser.add_argument("--server-name", default="skillroute")
+    add_backend_argument(harness_doctor_parser)
+    harness_doctor_parser.add_argument(
+        "--no-probe",
+        action="store_true",
+        help="Skip running the configured server; check the pack statically only",
+    )
+    harness_doctor_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_PROBE_TIMEOUT,
+        help="Seconds to wait for the server to answer initialize",
+    )
+    harness_doctor_parser.add_argument("--json", action="store_true", dest="as_json")
+    harness_doctor_parser.set_defaults(func=cmd_harness_doctor)
 
     ui_parser = subparsers.add_parser("ui", help="Launch the local Skill Atlas web UI")
     ui_parser.add_argument("--host", default="127.0.0.1")
@@ -759,6 +794,29 @@ def cmd_harness_install(args: argparse.Namespace) -> None:
     print(f"{detection.name}: {result.status} - {result.message}")
     if result.backup_path:
         print(f"{detection.name}: backup - {result.backup_path}")
+
+
+def cmd_harness_doctor(args: argparse.Namespace) -> None:
+    try:
+        reports = run_doctor(
+            args.harness or None,
+            repo_root=args.repo_root,
+            catalog=args.catalog,
+            backend=args.backend,
+            server_name=args.server_name,
+            mode=args.mode,
+            probe=not args.no_probe,
+            timeout=args.timeout,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    if args.as_json:
+        print_json([report.to_dict() for report in reports])
+    else:
+        print(render_doctor_reports(reports))
+    # Non-zero exit so `harness doctor` is usable as a CI gate.
+    if any(report.status == STATUS_FAIL for report in reports):
+        raise SystemExit(1)
 
 
 def cmd_ui(args: argparse.Namespace) -> None:
