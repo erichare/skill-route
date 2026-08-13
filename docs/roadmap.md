@@ -1,64 +1,99 @@
 # Roadmap
 
-This is a working roadmap for the next implementation slices.
+The 0.2 release — *"the router for skill bloat"* — ships in six independently
+mergeable stages. This file tracks their status; the stage numbers match the
+release plan and the PR titles.
 
-## Slice 1: Real Catalog Fixtures
+SKILL.md became an open standard in Dec 2025 and marketplaces followed, so
+discovery stopped being the bottleneck and judgment became it. 0.1 solved the
+judgment problem but could not reach it: it was not installable outside a git
+checkout, adding a harness cost ~7 edit sites, detection was macOS-only, and
+route traces were write-only with no caller identity. 0.2 closes those.
 
-Goal: index a broader local skill corpus and create realistic golden cases.
+| Stage | What | Status |
+| --- | --- | --- |
+| S0 | Catalog schema v2, migrations, attribution, outcomes | done |
+| S1 | Harness pack engine — 14 declarative manifests | done |
+| S2 | Distribution — PyPI, npm, Homebrew, `uvx`/`npx` configs | next |
+| S3 | Harness depth — deep packs, skills-dir sync, ACP server | not started |
+| S4 | Analytics + reports — `skillroute stats`, three renderers | not started |
+| S5 | Atlas — SSE live feed, semantic layout | not started |
+| S6 | Router intelligence — decomposition, `report_outcome`, registry gaps | not started |
 
-- Add fixture generation for a mixed skill catalog.
-- Add route cases for overlapping domains, conflicts, and complements.
-- Add eval deltas that explain rank/confidence movement.
+**Minimum coherent 0.2 if it has to ship early:** S0 + S1 + S2 + the CLI half of
+S4 — "harness packs, real distribution, and `skillroute stats`". Drop in this
+order: S6 → S5 → S4's HTML/CI renderers → S3's non-MCP install modes.
 
-## Slice 2: Backend-Aware Route Traces
+## S0 — Foundations (done)
 
-Goal: make traces explain retrieval behavior without reading raw JSON.
+Ordered, named migrations in `skillroute.migrations`; `Catalog.initialize()`
+detects the on-disk version, takes `BEGIN IMMEDIATE`, backs the file up before
+altering it, and refuses a catalog written by a newer build. Schema v2 records
+caller attribution and denormalizes ranked candidates into
+`route_trace_candidates` so analytics can use SQL. `route_outcomes`,
+`route_plans`, and `skill_projection` are created here even though S4–S6 are
+what read them, so no later stage needs a second migration on a file users keep.
 
-- Show backend hit ids, raw scores, and normalized semantic scores.
-- Mark local-only fallback when remote backend is selected but not configured.
-- Add trace comparison between two route ids.
+## S1 — Harness pack engine (done)
 
-## Slice 3: Astra Integration Contract
+Each harness is one `harnesses/<id>.toml` declaring detection, per-platform
+config paths, and install modes; the per-client quirks the old if/elif chain
+encoded became a closed set of named emitters. Adding a harness that fits an
+existing shape is a data change. Verified byte-identical to the 0.1 builder
+across all seven legacy clients before the old code was removed.
 
-Goal: make live Astra setup safer and easier to verify.
+`skillroute harness doctor` verifies a pack still matches reality — including
+running the configured server and confirming it answers an MCP `initialize`.
+See [harnesses.md](harnesses.md).
 
-- Add dry-run document preview before sync.
-- Add collection readiness checks.
-- Add small live smoke command gated by explicit credentials.
+## S2 — Distribution (next)
 
-## Slice 4: MCP Observability Tools
+The single biggest adoption unlock: nothing outside a git checkout can run
+SkillRoute today, because generated configs hardcode
+`node <repo>/mcp/build/index.js`.
 
-Goal: expose debug surfaces to agents, not only humans at the CLI.
+- Publish `skillroute` to PyPI and `@skillroute/mcp-server` to npm
+  (`PYPI_PUBLISH` / `NPM_PUBLISH` repo variables currently gate this).
+- Default generated configs to `uvx skillroute` / `npx -y @skillroute/mcp-server`,
+  with checkout paths behind `--local`.
+- Homebrew formula.
 
-- Add `skillroute.backend_status`.
-- Add `skillroute.list_traces`.
-- Add `skillroute.inspect_trace`.
+## S3 — Harness depth
 
-## Slice 4.5: Skill Atlas UI
+Deep packs for `claude-code`, `codex`, `pi`, `hermes`, `opencode` with every
+applicable mode. Skills-dir tri-mode: read-only discovery, opt-in projection,
+and `router_skill`. ACP server (`skillroute acp serve`, Python — ACP is plain
+JSON-RPC over stdio and needs no SDK). Harness attribution from the MCP
+`clientInfo` handshake.
 
-Goal: make the skill catalog explorable as a local visual graph.
+Standing risk: these tools move fast and paths drift. `harness doctor` and the
+`unverified` tier are how that stays honest.
 
-- Done: add `skillroute ui` with a local FastAPI server.
-- Done: add a React Flow/Vite Skill Atlas clustered by facets/domains.
-- Done: add read-only route previews that do not record traces.
-- Next: add metadata overlay editing and review workflows.
+## S4 — Analytics and reports
 
-## Slice 5: Router Scoring Review
+`skillroute.analytics` as pure SQL over the v2 tables, answering four question
+families: library health (which skills never win, which are near-duplicates,
+where the coverage holes are), routing quality, per-harness breakdown, and
+change over time. One report model, three renderers — terminal, self-contained
+`atlas.html`, and a GitHub Action that comments on skill-library PRs.
 
-Goal: make the hybrid score easier to tune.
+## S5 — Atlas
 
-- Extract scoring weights into a config object.
-- Add per-component eval reporting.
-- Add confidence band assertions to golden cases.
+SSE live route feed, a zero-dependency semantic layout (sparse random projection
+then power-iteration PCA, cached on the catalog fingerprint), analytics views,
+and a harness filter. The facet layout stays the default.
 
-## Slice 6: Agent Onboarding And Packaging
+## S6 — Router intelligence
 
-Goal: make local install and MCP registration smooth.
+Task decomposition into a `RoutePlan` with per-subtask steps and explicit gaps;
+`report_outcome` on MCP and ACP so agents close the loop; opt-in registry
+suggestions when decomposition finds a gap. 0.2 collects the outcome signal;
+learned routing from it is 0.3.
 
-- Done: add a one-command bootstrap for local development.
-- Done: add a prompted SkillRoute curl installer with detected-client setup.
-- Done: generate reviewed MCP setup for IBM Bob, Codex, Claude Code, Claude Desktop, VS Code, Windsurf, and Cursor.
-- Done: document current setup paths and plugin packaging direction.
-- Next: add package metadata polish.
-- Next: add a Codex plugin package with `.codex-plugin/plugin.json` and `.mcp.json`.
-- Next: add a small release checklist.
+## Out of scope for 0.2
+
+- Built-in LLM reranker (`ExternalCommandReranker` remains the seam)
+- Optional embedding-model extra
+- Indexing remote registries into the catalog — gap *suggestions* only
+- A long-lived `skillroute serve` daemon
+- Learned routing from outcome data
