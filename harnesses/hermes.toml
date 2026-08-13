@@ -1,0 +1,50 @@
+schema = 1
+id = "hermes"
+display_name = "Hermes Agent"
+tier = "first-party"
+homepage = "https://hermes-agent.nousresearch.com/docs"
+
+[detect]
+commands = ["hermes"]
+client_names = ["hermes", "hermes-agent"]
+paths.all = ["~/.hermes/config.yaml"]
+
+# Hermes is YAML-configured and SkillRoute carries no YAML dependency, so the
+# MCP entry is printed rather than merged. The yaml_map emitter renders the
+# snippet; it never writes the user's file.
+[modes.mcp]
+setup_method = "print_only"
+config_format = "yaml"
+emitter = "yaml_map"
+config_path = "~/.hermes/config.yaml"
+write_path.all = "~/.hermes/config.yaml"
+notes = [
+    "Add the printed block under `mcp_servers:` in ~/.hermes/config.yaml.",
+    "Hermes keys mcp_servers by server name, not as a list.",
+]
+
+[modes.mcp.extra]
+container = "mcp_servers"
+
+[modes.acp]
+setup_method = "print_only"
+config_format = "yaml"
+emitter = "yaml_map"
+config_path = "~/.hermes/config.yaml"
+notes = ["Hermes speaks ACP, so SkillRoute can attach as a routing-advisor agent."]
+
+[modes.acp.extra]
+container = "agents"
+
+[modes.skills]
+setup_method = "dir_sync"
+dir.all = "~/.hermes/skills"
+discovery = ["~/.hermes/skills"]
+# Hermes reads extra skill directories from external_dirs, so registration
+# beats copying: no duplication and no sync drift.
+register_in.path = "~/.hermes/config.yaml"
+register_in.key = "external_dirs"
+
+[modes.router_skill]
+setup_method = "dir_sync"
+dir.all = "~/.hermes/skills/skillroute"

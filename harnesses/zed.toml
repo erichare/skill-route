@@ -1,0 +1,29 @@
+schema = 1
+id = "zed"
+display_name = "Zed"
+tier = "breadth"
+homepage = "https://zed.dev/docs/ai/mcp"
+
+[detect]
+commands = ["zed"]
+client_names = ["zed"]
+paths.macos = ["~/.config/zed/settings.json"]
+paths.linux = ["~/.config/zed/settings.json"]
+paths.windows = ["%APPDATA%/Zed/settings.json"]
+apps.macos = ["/Applications/Zed.app"]
+
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "zed_context_servers"
+config_path = "~/.config/zed/settings.json"
+write_path.macos = "~/.config/zed/settings.json"
+write_path.linux = "~/.config/zed/settings.json"
+write_path.windows = "%APPDATA%/Zed/settings.json"
+
+[modes.acp]
+setup_method = "print_only"
+config_format = "json"
+emitter = "zed_context_servers"
+config_path = "~/.config/zed/settings.json"
+notes = ["Zed speaks ACP natively; SkillRoute attaches as a routing-advisor agent."]

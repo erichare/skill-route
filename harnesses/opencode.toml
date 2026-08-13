@@ -1,0 +1,33 @@
+schema = 1
+id = "opencode"
+display_name = "OpenCode"
+tier = "first-party"
+homepage = "https://opencode.ai/docs/mcp-servers"
+
+[detect]
+commands = ["opencode"]
+client_names = ["opencode"]
+paths.all = ["~/.config/opencode/opencode.json"]
+
+# OpenCode nests servers under "mcp" with an explicit local/remote type, rather
+# than the "mcpServers" shape everyone else uses.
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "opencode_mcp"
+config_path = "~/.config/opencode/opencode.json"
+write_path.all = "~/.config/opencode/opencode.json"
+scope_paths.project = "opencode.json"
+scopes = ["user", "project"]
+default_scope = "user"
+
+[modes.skills]
+setup_method = "dir_sync"
+dir.all = "~/.config/opencode/skills"
+project_dir = ".opencode/skills"
+discovery = ["~/.config/opencode/skills", ".opencode/skills"]
+
+[modes.router_skill]
+setup_method = "dir_sync"
+dir.all = "~/.config/opencode/skills/skillroute"
+project_dir = ".opencode/skills/skillroute"

@@ -1,0 +1,22 @@
+schema = 1
+id = "gemini-cli"
+display_name = "Gemini CLI"
+tier = "breadth"
+homepage = "https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html"
+
+[detect]
+commands = ["gemini"]
+client_names = ["gemini-cli", "gemini"]
+paths.all = ["~/.gemini/settings.json"]
+
+# Gemini CLI uses the same top-level mcpServers shape as Claude Code, so this
+# whole harness is pure data -- no new emitter.
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "~/.gemini/settings.json"
+write_path.all = "~/.gemini/settings.json"
+scope_paths.project = ".gemini/settings.json"
+scopes = ["user", "project"]
+default_scope = "user"

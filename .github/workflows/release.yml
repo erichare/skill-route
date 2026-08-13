@@ -28,6 +28,22 @@ jobs:
         with:
           node-version: "22"
 
+      # The tag is the only thing a human types here, and the version published
+      # comes from package metadata, not from the tag. Without this check,
+      # tagging v0.2.0 while pyproject.toml still says 0.1.0 publishes 0.1.0 to
+      # PyPI under a release titled v0.2.0 -- and a PyPI version can never be
+      # reused, so there is no clean recovery.
+      - name: Verify the tag matches both package versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          py=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          npm_version=$(node -p "require('./mcp/package.json').version")
+          echo "tag=$tag pyproject=$py package.json=$npm_version"
+          if [ "$tag" != "$py" ] || [ "$tag" != "$npm_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME disagrees with pyproject.toml ($py) and/or mcp/package.json ($npm_version)."
+            exit 1
+          fi
+
       - name: Build sdist and wheel (bundles the web UI)
         run: uv build
 
@@ -99,6 +115,10 @@ jobs:
     if: vars.NPM_PUBLISH == 'true'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      # npm trusted publishing is OIDC: this replaces NPM_TOKEN entirely, so
+      # there is no long-lived credential in repo secrets to leak or rotate.
+      id-token: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -106,13 +126,17 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "22.14.0"
           registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing needs npm >= 11.5.1, and Node 22 still bundles npm
+      # 10.x. Without this the publish fails on a message that does not mention
+      # the npm version at all.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Publish
         working-directory: mcp
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm ci
           npm publish

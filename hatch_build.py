@@ -1,8 +1,13 @@
-"""Hatch build hook that ships the built web UI inside distributions.
+"""Hatch build hook that ships bundled assets inside distributions.
 
-Wheels get the assets at ``skillroute/_web`` so ``skillroute ui`` works from a
-plain ``pip install``; sdists keep them at ``web/dist`` so wheels built from an
-sdist do not need node.
+Two things travel with the package:
+
+* the built web UI -- wheels get it at ``skillroute/_web`` so ``skillroute ui``
+  works from a plain ``pip install``; sdists keep it at ``web/dist`` so wheels
+  built from an sdist do not need node.
+* the harness manifests -- wheels get them at ``skillroute/_harnesses``, which
+  is where ``harnesses.default_manifest_root()`` looks first. Without this a
+  pip-installed SkillRoute would know about no harnesses at all.
 """
 
 from __future__ import annotations
@@ -25,8 +30,16 @@ class WebAssetsBuildHook(BuildHookInterface):
         dist = web_dir / "dist"
         if not (dist / "index.html").exists():
             self._build_web_assets(web_dir)
+        force_include = build_data.setdefault("force_include", {})
         target = "skillroute/_web" if self.target_name == "wheel" else "web/dist"
-        build_data.setdefault("force_include", {})[str(dist)] = target
+        force_include[str(dist)] = target
+
+        harnesses = Path(self.root) / "harnesses"
+        if not any(harnesses.glob("*.toml")):
+            raise RuntimeError(f"No harness manifests found in {harnesses}")
+        force_include[str(harnesses)] = (
+            "skillroute/_harnesses" if self.target_name == "wheel" else "harnesses"
+        )
 
     def _build_web_assets(self, web_dir: Path) -> None:
         npm = shutil.which("npm")

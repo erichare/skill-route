@@ -8,6 +8,7 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
 
+from skillroute.attribution import Attribution
 from skillroute.backends import LocalTokenBackend, RetrievalBackend
 from skillroute.catalog import Catalog
 from skillroute.context import collect_repo_context
@@ -103,6 +104,7 @@ class Router:
         limit: int = 5,
         *,
         record_trace: bool = True,
+        attribution: Attribution | None = None,
     ) -> RouteResponse:
         repo_path = Path(repo).expanduser() if repo else None
         repo_context = collect_repo_context(repo_path)
@@ -131,6 +133,8 @@ class Router:
                     "backend": self.backend.name,
                 },
                 response,
+                attribution=attribution,
+                weights=self.weights.to_json(),
             )
         return response
 

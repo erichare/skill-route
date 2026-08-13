@@ -1,0 +1,22 @@
+schema = 1
+id = "claude-desktop"
+display_name = "Claude Desktop"
+tier = "breadth"
+homepage = "https://modelcontextprotocol.io/quickstart/user"
+
+[detect]
+commands = []
+client_names = ["claude-desktop", "claude-ai"]
+paths.macos = ["~/Library/Application Support/Claude/claude_desktop_config.json"]
+paths.linux = ["~/.config/Claude/claude_desktop_config.json"]
+paths.windows = ["%APPDATA%/Claude/claude_desktop_config.json"]
+apps.macos = ["/Applications/Claude.app"]
+
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "~/Library/Application Support/Claude/claude_desktop_config.json or %APPDATA%\\Claude\\claude_desktop_config.json"
+write_path.macos = "~/Library/Application Support/Claude/claude_desktop_config.json"
+write_path.linux = "~/.config/Claude/claude_desktop_config.json"
+write_path.windows = "%APPDATA%/Claude/claude_desktop_config.json"

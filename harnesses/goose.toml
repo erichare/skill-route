@@ -1,0 +1,29 @@
+schema = 1
+id = "goose"
+display_name = "Goose"
+tier = "breadth"
+homepage = "https://block.github.io/goose/docs/getting-started/using-extensions"
+
+[detect]
+commands = ["goose"]
+client_names = ["goose", "goose-cli"]
+paths.macos = ["~/.config/goose/config.yaml"]
+paths.linux = ["~/.config/goose/config.yaml"]
+paths.windows = ["%APPDATA%/Block/goose/config/config.yaml"]
+
+# Goose is YAML-configured, so this prints rather than merges. Goose calls MCP
+# servers "extensions" and keys them by a normalized identifier.
+[modes.mcp]
+setup_method = "print_only"
+config_format = "yaml"
+emitter = "yaml_map"
+config_path = "~/.config/goose/config.yaml"
+write_path.macos = "~/.config/goose/config.yaml"
+write_path.linux = "~/.config/goose/config.yaml"
+write_path.windows = "%APPDATA%/Block/goose/config/config.yaml"
+notes = [
+    "Add the printed block under `extensions:` in the Goose config, or run `goose configure`.",
+]
+
+[modes.mcp.extra]
+container = "extensions"

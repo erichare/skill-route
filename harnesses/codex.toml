@@ -1,0 +1,43 @@
+schema = 1
+id = "codex"
+display_name = "Codex"
+tier = "first-party"
+homepage = "https://developers.openai.com/codex/mcp"
+
+[detect]
+commands = ["codex"]
+client_names = ["codex", "codex-cli", "openai-codex"]
+env = ["CODEX_SANDBOX"]
+paths.all = ["~/.codex/config.toml"]
+
+# Codex is TOML-configured. SkillRoute never rewrites a user's TOML -- tomllib
+# cannot write, and hand-merging someone's config.toml is not worth the blast
+# radius -- so this installs through the CLI and only ever *prints* the snippet.
+[modes.mcp]
+setup_method = "command"
+config_format = "toml"
+emitter = "codex_toml"
+config_path = "~/.codex/config.toml"
+argv = [
+    "codex", "mcp", "add", "{server_name}",
+    "--env", "SKILLROUTE_CATALOG_PATH={catalog}",
+    "--env", "SKILLROUTE_BACKEND={backend}",
+    "--", "{server_argv}",
+]
+write_path.all = "~/.codex/config.toml"
+
+[modes.mcp.extra]
+cwd = "{server_cwd}"
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+[modes.skills]
+setup_method = "dir_sync"
+dir.all = "~/.codex/skills"
+project_dir = ".codex/skills"
+discovery = ["~/.codex/skills", "~/.codex/plugins/cache"]
+
+[modes.router_skill]
+setup_method = "dir_sync"
+dir.all = "~/.codex/skills/skillroute"
+project_dir = ".codex/skills/skillroute"

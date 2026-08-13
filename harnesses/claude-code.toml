@@ -1,0 +1,51 @@
+schema = 1
+id = "claude-code"
+display_name = "Claude Code"
+tier = "first-party"
+homepage = "https://code.claude.com/docs/en/mcp"
+
+[detect]
+commands = ["claude"]
+client_names = ["claude-code", "claude", "claude-code-*"]
+env = ["CLAUDECODE"]
+paths.all = ["~/.claude.json"]
+
+[modes.mcp]
+setup_method = "command"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "~/.claude.json"
+scopes = ["local", "project", "user"]
+default_scope = "user"
+argv = [
+    "claude", "mcp", "add",
+    "--transport", "stdio",
+    "--scope", "{scope}",
+    "--env", "SKILLROUTE_CATALOG_PATH={catalog}",
+    "--env", "SKILLROUTE_BACKEND={backend}",
+    "{server_name}",
+    "--", "{server_argv}",
+]
+write_path.all = "~/.claude.json"
+scope_paths.project = ".mcp.json"
+
+[modes.skills]
+setup_method = "dir_sync"
+dir.all = "~/.claude/skills"
+project_dir = ".claude/skills"
+discovery = ["~/.claude/skills", "~/.claude/plugins/*/skills"]
+
+[modes.router_skill]
+setup_method = "dir_sync"
+dir.all = "~/.claude/skills/skillroute"
+project_dir = ".claude/skills/skillroute"
+
+[modes.hook]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "claude_session_start_hook"
+config_path = "~/.claude/settings.json"
+write_path.all = "~/.claude/settings.json"
+scope_paths.project = ".claude/settings.json"
+scopes = ["project", "user"]
+default_scope = "project"

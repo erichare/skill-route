@@ -1,0 +1,19 @@
+schema = 1
+id = "vscode"
+display_name = "VS Code"
+tier = "breadth"
+homepage = "https://code.visualstudio.com/docs/copilot/chat/mcp-servers"
+
+[detect]
+commands = ["code", "code-insiders"]
+client_names = ["vscode", "visual-studio-code"]
+env = ["VSCODE_PID"]
+
+# VS Code is the one harness that uses a top-level "servers" key rather than
+# "mcpServers", and embeds the server name inside the object it is handed.
+[modes.mcp]
+setup_method = "command"
+config_format = "json"
+emitter = "vscode_servers"
+config_path = "VS Code user profile mcp.json"
+argv = ["code", "--add-mcp", "{server_json}"]

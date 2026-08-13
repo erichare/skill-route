@@ -1,0 +1,17 @@
+schema = 1
+id = "amp"
+display_name = "Amp"
+tier = "breadth"
+homepage = "https://ampcode.com/manual"
+
+[detect]
+commands = ["amp"]
+client_names = ["amp", "sourcegraph-amp"]
+paths.all = ["~/.config/amp/settings.json"]
+
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "amp_mcp_servers"
+config_path = "~/.config/amp/settings.json"
+write_path.all = "~/.config/amp/settings.json"

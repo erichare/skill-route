@@ -92,14 +92,21 @@ uv run skillroute ui
 
 The bundled MCP server exposes three tools over stdio — `skillroute.route`,
 `skillroute.search`, and `skillroute.inspect_skill`. One command writes the
-config for your client (JSON edits are backed up first):
+config for your harness (JSON edits are backed up first):
 
 ```bash
-uv run skillroute mcp config --client claude-code
+uv run skillroute harness install claude-code
+uv run skillroute harness detect        # what is installed here
+uv run skillroute harness list          # everything SkillRoute knows about
 ```
 
-Supported clients: `claude-code` · `claude-desktop` · `codex` · `cursor` ·
-`ibm-bob` · `vscode` · `windsurf`
+Supported harnesses: `amp` · `claude-code` · `claude-desktop` · `codex` ·
+`cursor` · `gemini-cli` · `goose` · `hermes` · `ibm-bob` · `opencode` · `pi` ·
+`vscode` · `windsurf` · `zed`
+
+Each one is a single declarative manifest in [`harnesses/`](harnesses), so
+adding a new tool is usually a data change with no Python — see
+[Harness Packs](docs/harnesses.md).
 
 ## Route observability
 
@@ -146,7 +153,8 @@ flowchart LR
 | `skillroute traces list` | Inspect past routing decisions |
 | `skillroute eval run` | Golden-route evals against expected outcomes |
 | `skillroute backend status` | Retrieval backend health |
-| `skillroute mcp config --client <client>` | Configure your agent client |
+| `skillroute harness list` | Every harness SkillRoute supports, and its modes |
+| `skillroute harness install <harness>` | Configure a harness to use SkillRoute |
 | `skillroute ui` | Launch the Skill Atlas |
 
 ## Docs
@@ -154,6 +162,7 @@ flowchart LR
 | Guide | |
 | --- | --- |
 | [Getting Started](docs/getting-started.md) | Index, route, and inspect in five minutes |
+| [Harness Packs](docs/harnesses.md) | Supported harnesses, install modes, and how to add one |
 | [Agent Setup](docs/agent-setup.md) | Wire SkillRoute into your agent clients |
 | [MCP Server](docs/mcp-server.md) | Tools, transport, and configuration |
 | [Skill Atlas UI](docs/skill-atlas.md) | The graph explorer in depth |

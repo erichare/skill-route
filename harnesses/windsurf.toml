@@ -1,0 +1,18 @@
+schema = 1
+id = "windsurf"
+display_name = "Windsurf"
+tier = "breadth"
+homepage = "https://docs.windsurf.com/windsurf/cascade/mcp"
+
+[detect]
+commands = ["windsurf"]
+client_names = ["windsurf", "codeium"]
+paths.all = ["~/.codeium/windsurf/mcp_config.json"]
+apps.macos = ["/Applications/Windsurf.app"]
+
+[modes.mcp]
+setup_method = "json_merge"
+config_format = "json"
+emitter = "mcp_servers"
+config_path = "~/.codeium/windsurf/mcp_config.json"
+write_path.all = "~/.codeium/windsurf/mcp_config.json"
