@@ -35,6 +35,19 @@ PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 # as a whole array element.
 SPLAT_PLACEHOLDERS = frozenset({"server_argv"})
 
+NPM_PACKAGE = "@skillroute/mcp-server"
+
+# How a generated config names the MCP server. `local` points at a built
+# checkout, which is the only thing that works before the package is published;
+# `npx` points at the published package, which is the only thing that works for
+# anyone who did not clone the repo.
+SERVER_SOURCES = ("local", "npx")
+
+# The S2 switch. Flipping this to "npx" changes what every generated config
+# points at, so it stays "local" until @skillroute/mcp-server is actually on
+# npm -- otherwise `harness install` would emit configs that resolve to nothing.
+DEFAULT_SERVER_SOURCE = "local"
+
 
 class RenderError(ValueError):
     """A manifest referenced something the render context cannot supply."""
@@ -42,6 +55,25 @@ class RenderError(ValueError):
 
 def default_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def local_entrypoint(repo_root: Path) -> Path:
+    return repo_root / "mcp" / "build" / "index.js"
+
+
+def server_argv_for(
+    source: str, *, repo_root: Path, package: str = NPM_PACKAGE
+) -> list[str]:
+    """The argv a generated config should use to start the MCP server."""
+    if source == "npx":
+        # `-y` so a first run does not stop at an install prompt inside a
+        # harness that gives the server no terminal.
+        return ["npx", "-y", package]
+    if source == "local":
+        return ["node", str(local_entrypoint(repo_root))]
+    raise RenderError(
+        f"Unknown server source {source!r}; expected one of: {', '.join(SERVER_SOURCES)}"
+    )
 
 
 def shell_command(parts: list[str]) -> str:
@@ -59,6 +91,7 @@ def build_harness_setup(
     scope: str | None = None,
     platform: str | None = None,
     server_argv: list[str] | None = None,
+    server_source: str | None = None,
 ) -> dict[str, Any]:
     """Build the install payload for one harness and mode."""
     manifest = manifest_for(harness)
@@ -78,8 +111,13 @@ def build_harness_setup(
     selected_backend = (
         backend or os.environ.get("SKILLROUTE_BACKEND") or "local"
     ).strip().lower()
-    entrypoint = resolved_repo_root / "mcp" / "build" / "index.js"
-    argv = list(server_argv) if server_argv else ["node", str(entrypoint)]
+    entrypoint = local_entrypoint(resolved_repo_root)
+    resolved_source = server_source or DEFAULT_SERVER_SOURCE
+    argv = (
+        list(server_argv)
+        if server_argv
+        else server_argv_for(resolved_source, repo_root=resolved_repo_root)
+    )
 
     env = {
         "SKILLROUTE_CATALOG_PATH": str(catalog_path),
@@ -117,12 +155,18 @@ def build_harness_setup(
     # only after the emitter has run.
     context["server_json"] = json.dumps(server_config, sort_keys=True)
 
-    notes = [
-        "Run ./scripts/bootstrap.sh first if mcp/build/index.js does not exist.",
-        "The generated config points at this local checkout and catalog.",
-    ]
-    if not entrypoint.exists():
-        notes.append(f"MCP entrypoint not found yet: {entrypoint}")
+    if resolved_source == "local":
+        notes = [
+            "Run ./scripts/bootstrap.sh first if mcp/build/index.js does not exist.",
+            "The generated config points at this local checkout and catalog.",
+        ]
+        if not entrypoint.exists():
+            notes.append(f"MCP entrypoint not found yet: {entrypoint}")
+    else:
+        notes = [
+            f"The generated config runs the published {NPM_PACKAGE} via npx.",
+            "npx resolves the package on first run, so that run is slower.",
+        ]
     notes.extend(install.notes)
 
     install_command_parts = (
@@ -137,6 +181,7 @@ def build_harness_setup(
         "server_name": server_name,
         "repo_root": str(resolved_repo_root),
         "mcp_entrypoint": str(entrypoint),
+        "server_source": resolved_source,
         "catalog": str(catalog_path),
         "backend": selected_backend,
         "server_config": server_config,

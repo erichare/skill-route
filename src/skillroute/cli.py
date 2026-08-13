@@ -30,6 +30,8 @@ from skillroute.harness_doctor import (
     run_doctor,
 )
 from skillroute.harness_render import (
+    DEFAULT_SERVER_SOURCE,
+    SERVER_SOURCES,
     build_harness_setup,
     default_repo_root,
     render_harness_setup,
@@ -301,6 +303,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_backend_argument(harness_show_parser)
     harness_show_parser.add_argument("--json", action="store_true", dest="as_json")
+    harness_show_parser.add_argument(
+        "--server-source",
+        choices=SERVER_SOURCES,
+        default=DEFAULT_SERVER_SOURCE,
+        help="Point the config at a built checkout (local) or the published package (npx)",
+    )
     harness_show_parser.set_defaults(func=cmd_harness_show)
 
     harness_install_parser = harness_subparsers.add_parser(
@@ -316,6 +324,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="Print what would be done, change nothing"
     )
     harness_install_parser.add_argument("--yes", action="store_true")
+    harness_install_parser.add_argument(
+        "--server-source",
+        choices=SERVER_SOURCES,
+        default=DEFAULT_SERVER_SOURCE,
+        help="Point the config at a built checkout (local) or the published package (npx)",
+    )
     harness_install_parser.set_defaults(func=cmd_harness_install)
 
     harness_doctor_parser = harness_subparsers.add_parser(
@@ -755,6 +769,7 @@ def cmd_harness_show(args: argparse.Namespace) -> None:
         server_name=args.server_name,
         scope=args.scope,
         platform=args.platform,
+        server_source=args.server_source,
     )
     if args.as_json:
         print_json(payload)
@@ -772,6 +787,7 @@ def cmd_harness_install(args: argparse.Namespace) -> None:
         backend=args.backend,
         server_name=args.server_name,
         scope=args.scope,
+        server_source=args.server_source,
     )
     if args.dry_run:
         print(render_harness_setup(payload))

@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file the tool no longer reads. An absent or unconfigured harness warns rather
   than fails, so a non-zero exit means real breakage and the command works as a
   CI gate (`--json`, `--no-probe`).
+- `--server-source {local,npx}` on `harness show` and `harness install` chooses
+  whether a generated config starts the MCP server from a built checkout or from
+  the published `@skillroute/mcp-server` via `npx -y`. v0.1 hardcoded the
+  checkout path, which is why nothing outside a git clone could run SkillRoute.
+  The default stays `local` until the package is actually on npm, so this adds
+  the capability without emitting configs that resolve to nothing.
 - Catalog schema v2 with real migration machinery. `skillroute.migrations`
   defines ordered, named migrations; `Catalog.initialize()` detects the on-disk
   version, takes a write lock (`BEGIN IMMEDIATE`) so a concurrent index and UI

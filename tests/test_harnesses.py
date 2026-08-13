@@ -404,3 +404,66 @@ def test_cli_mcp_config_deprecation_goes_to_stderr_only(capsys) -> None:
     assert "deprecated" in captured.err
     assert "deprecated" not in captured.out
     assert __import__("json").loads(captured.out)["harness"] == "codex"
+
+
+# --- server source (S2) ---------------------------------------------------
+
+
+def test_server_argv_local_points_at_the_checkout(tmp_path: Path) -> None:
+    from skillroute.harness_render import server_argv_for
+
+    argv = server_argv_for("local", repo_root=tmp_path)
+    assert argv[0] == "node"
+    assert argv[1].endswith("mcp/build/index.js")
+
+
+def test_server_argv_npx_points_at_the_published_package(tmp_path: Path) -> None:
+    from skillroute.harness_render import NPM_PACKAGE, server_argv_for
+
+    assert server_argv_for("npx", repo_root=tmp_path) == ["npx", "-y", NPM_PACKAGE]
+
+
+def test_server_argv_rejects_an_unknown_source(tmp_path: Path) -> None:
+    from skillroute.harness_render import RenderError, server_argv_for
+
+    with pytest.raises(RenderError, match="Unknown server source"):
+        server_argv_for("carrier-pigeon", repo_root=tmp_path)
+
+
+def test_default_server_source_stays_local_until_the_package_ships() -> None:
+    """Guards the S2 switch: flipping it must be deliberate, not incidental."""
+    from skillroute.harness_render import DEFAULT_SERVER_SOURCE
+
+    assert DEFAULT_SERVER_SOURCE == "local"
+
+
+@pytest.mark.parametrize("harness", sorted(load_manifests()))
+def test_every_harness_renders_against_both_server_sources(
+    harness: str, tmp_path: Path
+) -> None:
+    from skillroute.harness_render import SERVER_SOURCES, build_harness_setup
+
+    for source in SERVER_SOURCES:
+        payload = build_harness_setup(
+            harness=harness,
+            mode="mcp",
+            repo_root=tmp_path,
+            catalog=tmp_path / "c.db",
+            server_source=source,
+        )
+        assert payload["server_source"] == source
+
+
+def test_npx_source_drops_the_local_checkout_notes(tmp_path: Path) -> None:
+    from skillroute.harness_render import build_harness_setup
+
+    payload = build_harness_setup(
+        harness="claude-code",
+        mode="mcp",
+        repo_root=tmp_path,
+        catalog=tmp_path / "c.db",
+        server_source="npx",
+    )
+    joined = " ".join(payload["notes"])
+    assert "bootstrap.sh" not in joined
+    assert "npx" in joined
