@@ -7,6 +7,7 @@ checking it. That is the property that makes a new harness cheap to contribute.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -467,3 +468,66 @@ def test_npx_source_drops_the_local_checkout_notes(tmp_path: Path) -> None:
     joined = " ".join(payload["notes"])
     assert "bootstrap.sh" not in joined
     assert "npx" in joined
+
+
+def declares_key(config: object, key: str) -> bool:
+    """Is `key` a config *key*, not just a substring somewhere in a path?
+
+    Configs come back as dicts for JSON harnesses and as rendered text for the
+    TOML one, so both shapes need checking.
+    """
+    if isinstance(config, dict):
+        return key in config or any(declares_key(v, key) for v in config.values())
+    if isinstance(config, list):
+        return any(declares_key(item, key) for item in config)
+    if isinstance(config, str):
+        return any(
+            line.strip().startswith(f"{key} =") for line in config.splitlines()
+        )
+    return False
+
+
+@pytest.mark.parametrize("harness", ["codex", "ibm-bob"])
+def test_working_directory_is_dropped_for_a_published_server(
+    harness: str, tmp_path: Path
+) -> None:
+    """An npx-resolved package has no checkout, so cwd must not be emitted."""
+    from skillroute.harness_render import build_harness_setup
+
+    local = build_harness_setup(
+        harness=harness, mode="mcp", repo_root=tmp_path, catalog=tmp_path / "c.db"
+    )
+    npx = build_harness_setup(
+        harness=harness,
+        mode="mcp",
+        repo_root=tmp_path,
+        catalog=tmp_path / "c.db",
+        server_source="npx",
+    )
+    assert declares_key(local["config"], "cwd")
+    assert not declares_key(npx["config"], "cwd")
+
+
+def test_no_generated_config_leaks_a_checkout_path_under_npx(tmp_path: Path) -> None:
+    """The whole point of S2: an npx config must work off a clone."""
+    from skillroute.harness_render import build_harness_setup
+
+    marker = str(tmp_path)
+    for harness in sorted(load_manifests()):
+        payload = build_harness_setup(
+            harness=harness,
+            mode="mcp",
+            repo_root=tmp_path,
+            catalog=tmp_path / "c.db",
+            server_source="npx",
+        )
+        rendered = json.dumps(payload["config"]) + json.dumps(payload["server_config"])
+        # The catalog path is excluded deliberately, and it is the one thing
+        # still checkout-bound under npx: default_catalog_path() resolves to
+        # <repo_root>/.skillroute/catalog.db. Where a published install should
+        # keep its catalog is an open decision, so this asserts the rest of the
+        # config is clean rather than pretending that part is settled.
+        leaked = [
+            line for line in rendered.split('"') if marker in line and "c.db" not in line
+        ]
+        assert not leaked, f"{harness} leaked a checkout path: {leaked}"

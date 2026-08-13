@@ -27,7 +27,7 @@ argv = [
 write_path.all = "~/.codex/config.toml"
 
 [modes.mcp.extra]
-cwd = "{repo_root}"
+cwd = "{server_cwd}"
 startup_timeout_sec = 20
 tool_timeout_sec = 60
 

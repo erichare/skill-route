@@ -135,11 +135,22 @@ def build_harness_setup(
         "catalog": str(catalog_path),
         "backend": selected_backend,
         "repo_root": str(resolved_repo_root),
+        # Where the server process should run. Only a checkout has a meaningful
+        # working directory; an npx-resolved package does not, so this renders
+        # empty and the key it fills is dropped below.
+        "server_cwd": str(resolved_repo_root) if resolved_source == "local" else "",
         "scope": resolved_scope or "",
         "server_argv": argv,
     }
 
-    extra = {key: _substitute(value, context) for key, value in install.extra.items()}
+    # An extra that renders empty is one the manifest declared for a situation
+    # that does not apply here (cwd under npx). Emitting `cwd: ""` would be
+    # worse than omitting it -- some harnesses treat it as a real path.
+    extra = {
+        key: rendered
+        for key, value in install.extra.items()
+        if (rendered := _substitute(value, context)) != ""
+    }
     emitter = EMITTERS.get(install.emitter)
     config: Any = None
     server_config: dict[str, Any] = stdio_server_config

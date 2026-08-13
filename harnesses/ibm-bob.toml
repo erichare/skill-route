@@ -18,5 +18,5 @@ config_path = "~/.bob/mcp.json or .bob/mcp.json"
 write_path.all = "~/.bob/mcp.json"
 
 [modes.mcp.extra]
-cwd = "{repo_root}"
+cwd = "{server_cwd}"
 disabled = false
