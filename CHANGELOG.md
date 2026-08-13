@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-13
+
 ### Added
 
 - **Harness packs.** Every agent tool SkillRoute supports is now one declarative
@@ -116,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolve inside it (CodeQL `py/path-injection`). The bundled UI never sent
   `repo`, and the CLI's `--repo` is unaffected.
 
-[Unreleased]: https://github.com/erichare/skill-route/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/erichare/skill-route/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/erichare/skill-route/compare/v0.1.0...v0.2.0
 
 ## [0.1.0] - 2026-08-10
 
