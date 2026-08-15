@@ -7,7 +7,7 @@ small, closed set of named *emitters* below.
 An emitter owns exactly one config *shape*. Adding a harness whose config looks
 like an existing shape is pure data; a genuinely new shape adds one function
 here plus its test, which is a deliberate reviewable event rather than routine
-work. Six of the fourteen shipped harnesses share ``mcp_servers`` unchanged.
+work. Six of the fifteen shipped harnesses share ``mcp_servers`` unchanged.
 """
 
 from __future__ import annotations
@@ -389,6 +389,41 @@ def emit_yaml_map(
     return "\n".join(lines), stdio
 
 
+def emit_dsh_cordis_patch(
+    *, server_name: str, stdio: dict[str, Any], extra: dict[str, Any], context: dict[str, Any]
+) -> EmitterResult:
+    """DeepSeek Harness: a cordis.patch.yml insert for its MCP client plugin.
+
+    dsh loads every capability as a Cordis plugin, and MCP servers arrive
+    through @deepseek-ai/dsh-mcp-client. A server is added by inserting one
+    entry into a profile's cordis.patch.yml -- a YAML list of patch options,
+    which SkillRoute therefore prints rather than merges.
+    """
+    indent = "  "
+    lines = [
+        "# SkillRoute MCP server for DeepSeek Harness.",
+        "# Append to ~/.dsh/cordis.patch.yml (all profiles) or",
+        "# ~/.dsh/profiles/<name>/cordis.patch.yml (one profile).",
+        "- insert:",
+        f"{indent}- id: mcp-skillroute",
+        f"{indent}  name: '@deepseek-ai/dsh-mcp-client'",
+        f"{indent}  config:",
+        f"{indent}    serverName: {_yaml_scalar(server_name)}",
+        f"{indent}    transport: stdio",
+        f"{indent}    command: {_yaml_scalar(stdio['command'])}",
+    ]
+    if stdio["args"]:
+        lines.append(f"{indent}    args:")
+        lines.extend(f"{indent}      - {_yaml_scalar(arg)}" for arg in stdio["args"])
+    if stdio["env"]:
+        lines.append(f"{indent}    env:")
+        lines.extend(
+            f"{indent}      {key}: {_yaml_scalar(value)}"
+            for key, value in sorted(stdio["env"].items())
+        )
+    return "\n".join(lines), stdio
+
+
 def emit_claude_session_start_hook(
     *, server_name: str, stdio: dict[str, Any], extra: dict[str, Any], context: dict[str, Any]
 ) -> EmitterResult:
@@ -417,6 +452,7 @@ EMITTERS: dict[str, Emitter] = {
     "amp_mcp_servers": emit_amp_mcp_servers,
     "codex_toml": emit_codex_toml,
     "yaml_map": emit_yaml_map,
+    "dsh_cordis_patch": emit_dsh_cordis_patch,
     "claude_session_start_hook": emit_claude_session_start_hook,
 }
 

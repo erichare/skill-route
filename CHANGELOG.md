@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `deepseek` harness: emit a `cordis.patch.yml` MCP insert for DeepSeek
+  Harness (`dsh`), which loads MCP servers through its
+  `@deepseek-ai/dsh-mcp-client` plugin. A new `dsh_cordis_patch` emitter
+  renders the patch-list shape; the mode is print-only because SkillRoute never
+  merges a user's YAML.
+- `@skillroute/dsh-plugin`: a `dsh` **bundle** (an npm package declaring
+  `dsh.bundle.patch`) so DeepSeek Harness users get a one-command install —
+  `dsh plugin --profile web add @skillroute/dsh-plugin`. The release workflow
+  packs and publishes it alongside the MCP server.
+
 ## [0.3.0] - 2026-08-13
 
 ### Added

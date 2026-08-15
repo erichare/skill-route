@@ -103,12 +103,25 @@ uv run skillroute harness list          # everything SkillRoute knows about
 ```
 
 Supported harnesses: `amp` · `claude-code` · `claude-desktop` · `codex` ·
-`cursor` · `gemini-cli` · `goose` · `hermes` · `ibm-bob` · `opencode` · `pi` ·
+`cursor` · `deepseek` · `gemini-cli` · `goose` · `hermes` · `ibm-bob` · `opencode` · `pi` ·
 `vscode` · `windsurf` · `zed`
 
 Each one is a single declarative manifest in [`harnesses/`](harnesses), so
 adding a new tool is usually a data change with no Python — see
 [Harness Packs](docs/harnesses.md).
+
+**DeepSeek Harness** installs as a bundle instead, with one command:
+
+```bash
+dsh plugin --profile web add @skillroute/dsh-plugin
+```
+
+The bundle registers SkillRoute's MCP server through dsh's built-in
+`@deepseek-ai/dsh-mcp-client`, giving agents `mcp__skillroute__route`,
+`mcp__skillroute__search`, and `mcp__skillroute__inspect_skill`. The Python
+core is zero-install when `uv` is present (the bridge runs
+`uvx --from skillroute`); otherwise `pipx install skillroute` once. See
+[`dsh-plugin/README.md`](dsh-plugin/README.md).
 
 ## Route observability
 

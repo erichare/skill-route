@@ -1,0 +1,38 @@
+{
+  "name": "@skillroute/dsh-plugin",
+  "version": "0.3.0",
+  "description": "DeepSeek Harness (dsh) bundle wiring SkillRoute's skill router into your agents.",
+  "license": "MIT",
+  "author": "Eric Hare",
+  "homepage": "https://github.com/erichare/skill-route#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erichare/skill-route.git",
+    "directory": "dsh-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/erichare/skill-route/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek",
+    "harness",
+    "mcp",
+    "skills",
+    "routing",
+    "agents"
+  ],
+  "type": "module",
+  "files": [
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

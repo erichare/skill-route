@@ -33,14 +33,15 @@ jobs:
       # tagging v0.2.0 while pyproject.toml still says 0.1.0 publishes 0.1.0 to
       # PyPI under a release titled v0.2.0 -- and a PyPI version can never be
       # reused, so there is no clean recovery.
-      - name: Verify the tag matches both package versions
+      - name: Verify the tag matches all package versions
         run: |
           tag="${GITHUB_REF_NAME#v}"
           py=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
-          npm_version=$(node -p "require('./mcp/package.json').version")
-          echo "tag=$tag pyproject=$py package.json=$npm_version"
-          if [ "$tag" != "$py" ] || [ "$tag" != "$npm_version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME disagrees with pyproject.toml ($py) and/or mcp/package.json ($npm_version)."
+          mcp_version=$(node -p "require('./mcp/package.json').version")
+          plugin_version=$(node -p "require('./dsh-plugin/package.json').version")
+          echo "tag=$tag pyproject=$py mcp=$mcp_version dsh-plugin=$plugin_version"
+          if [ "$tag" != "$py" ] || [ "$tag" != "$mcp_version" ] || [ "$tag" != "$plugin_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME disagrees with pyproject.toml ($py), mcp/package.json ($mcp_version), and/or dsh-plugin/package.json ($plugin_version)."
             exit 1
           fi
 
@@ -58,6 +59,10 @@ jobs:
         run: |
           npm ci
           npm pack --pack-destination ../dist
+
+      - name: Pack dsh plugin tarball
+        working-directory: dsh-plugin
+        run: npm pack --pack-destination ../dist
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -111,7 +116,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   npm:
-    name: Publish MCP server to npm
+    name: Publish npm packages
     if: vars.NPM_PUBLISH == 'true'
     needs: build
     runs-on: ubuntu-latest
@@ -137,8 +142,12 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Publish
+      - name: Publish MCP server
         working-directory: mcp
         run: |
           npm ci
           npm publish
+
+      - name: Publish dsh plugin
+        working-directory: dsh-plugin
+        run: npm publish

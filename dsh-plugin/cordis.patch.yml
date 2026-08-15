@@ -1,0 +1,17 @@
+# SkillRoute for DeepSeek Harness.
+#
+# Registers SkillRoute's MCP server so your agents can route requests to
+# skills, search the catalog, and inspect skills. The tools appear as
+# mcp__skillroute__route, mcp__skillroute__search, and
+# mcp__skillroute__inspect_skill.
+#
+# Install:  dsh plugin --profile web add @skillroute/dsh-plugin
+# Manual:   append this block to ~/.dsh/cordis.patch.yml
+- insert:
+    - id: mcp-skillroute
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: skillroute
+        transport: stdio
+        command: npx
+        args: ['-y', '@skillroute/mcp-server']

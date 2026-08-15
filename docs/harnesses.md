@@ -30,6 +30,7 @@ exercised end to end. `breadth` harnesses are MCP-only.
 | `amp` | Amp | breadth | `mcp` | `amp_mcp_servers` |
 | `claude-desktop` | Claude Desktop | breadth | `mcp` | `mcp_servers` |
 | `cursor` | Cursor | breadth | `mcp` | `mcp_servers` |
+| `deepseek` | DeepSeek Harness | breadth | `mcp` | `dsh_cordis_patch` |
 | `gemini-cli` | Gemini CLI | breadth | `mcp` | `mcp_servers` |
 | `goose` | Goose | breadth | `mcp` | `yaml_map` |
 | `ibm-bob` | IBM Bob | breadth | `mcp` | `mcp_servers` |
@@ -110,7 +111,7 @@ and is therefore only valid as a whole array element.
 
 ### Config shapes (emitters)
 
-A manifest picks a shape by name. Six of the fourteen shipped harnesses reuse
+A manifest picks a shape by name. Six of the fifteen shipped harnesses reuse
 `mcp_servers` unchanged — if yours matches an existing shape, you write no code.
 
 | Emitter | Shape |
@@ -122,6 +123,7 @@ A manifest picks a shape by name. Six of the fourteen shipped harnesses reuse
 | `amp_mcp_servers` | `amp.mcpServers` |
 | `codex_toml` | a TOML snippet |
 | `yaml_map` | a YAML map under a configurable key |
+| `dsh_cordis_patch` | a DeepSeek Harness `cordis.patch.yml` MCP insert |
 | `claude_session_start_hook` | a Claude Code hook entry |
 
 Extra literal keys go in `[modes.<mode>.extra]` and are folded into the emitted
@@ -164,7 +166,7 @@ skillroute harness show goose --platform windows --json
 
 ## Verifying a pack: `harness doctor`
 
-Manifests encode config paths for fourteen tools that each move on their own
+Manifests encode config paths for fifteen tools that each move on their own
 schedule, and a stale path fails quietly — `harness install` reports success
 while writing to a file the tool no longer reads. `doctor` is how that stays
 honest.

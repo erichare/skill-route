@@ -1,6 +1,6 @@
 """Verify that a harness pack still describes reality.
 
-The manifests in ``harnesses/`` encode config paths for fourteen tools that each
+The manifests in ``harnesses/`` encode config paths for fifteen tools that each
 move on their own schedule. A path that was right when the pack was written is
 the kind of thing that rots silently: ``harness install`` keeps reporting
 success while writing to a file the tool no longer reads.

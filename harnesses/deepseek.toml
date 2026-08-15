@@ -1,0 +1,25 @@
+schema = 1
+id = "deepseek"
+display_name = "DeepSeek Harness"
+tier = "breadth"
+homepage = "https://deepseek.com/harness/en/"
+
+[detect]
+commands = ["dsh"]
+client_names = ["deepseek-harness", "dsh", "deepseek-harness-*"]
+paths.all = ["~/.dsh/cordis.patch.yml"]
+
+# DeepSeek Harness (`dsh`) loads every capability as a Cordis plugin; an MCP
+# server is added by inserting a `@deepseek-ai/dsh-mcp-client` entry into a
+# profile's `cordis.patch.yml`. That file is a YAML patch list, so SkillRoute
+# prints rather than merges.
+[modes.mcp]
+setup_method = "print_only"
+config_format = "yaml"
+emitter = "dsh_cordis_patch"
+config_path = "~/.dsh/cordis.patch.yml"
+write_path.all = "~/.dsh/cordis.patch.yml"
+notes = [
+    "Append the printed block to ~/.dsh/cordis.patch.yml (all profiles) or ~/.dsh/profiles/<name>/cordis.patch.yml (one profile).",
+    "Tools appear to agents as mcp__skillroute__route, mcp__skillroute__search, and mcp__skillroute__inspect_skill.",
+]

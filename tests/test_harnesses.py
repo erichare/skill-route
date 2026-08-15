@@ -322,6 +322,19 @@ def test_hermes_and_goose_emit_yaml_under_their_own_container() -> None:
     assert goose["config"].startswith("extensions:")
 
 
+def test_deepseek_emits_a_cordis_patch_insert() -> None:
+    payload = setup("deepseek")
+    assert payload["config_format"] == "yaml"
+    assert payload["setup_method"] == "print_only"
+    config = payload["config"]
+    assert "- insert:" in config
+    assert "name: '@deepseek-ai/dsh-mcp-client'" in config
+    assert "serverName: skillroute" in config
+    assert "transport: stdio" in config
+    assert "command: node" in config
+    assert "SKILLROUTE_CATALOG_PATH:" in config
+
+
 def test_gemini_cli_reuses_the_standard_shape_with_no_new_emitter() -> None:
     """Pure-data harness: proof the manifest system pays off."""
     assert MANIFESTS["gemini-cli"].mode("mcp").emitter == "mcp_servers"

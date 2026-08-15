@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 // A directory tree with no src/skillroute, mimicking an npx/global install layout.
 const installedDir = path.join(mkdtempSync(path.join(os.tmpdir(), "skillroute-mcp-")), "build");
 
-const ENV_KEYS = ["SKILLROUTE_REPO_ROOT", "SKILLROUTE_PYTHON", "PYTHONPATH"];
+const ENV_KEYS = ["SKILLROUTE_REPO_ROOT", "SKILLROUTE_PYTHON", "PYTHONPATH", "PATH", "PATHEXT"];
 let savedEnv;
 
 beforeEach(() => {
@@ -58,12 +58,39 @@ test("checkout mode: SKILLROUTE_PYTHON selects the interpreter", () => {
   assert.deepEqual(resolved.args, ["-m", "skillroute", "bridge", "inspect"]);
 });
 
-test("installed mode: falls back to the skillroute console script", () => {
+function makeExecutable(dir, name) {
+  const file = path.join(dir, name);
+  writeFileSync(file, "#!/bin/sh\n");
+  chmodSync(file, 0o755);
+  return file;
+}
+
+test("installed mode: prefers the skillroute console script when it is on PATH", () => {
+  const binDir = mkdtempSync(path.join(os.tmpdir(), "skillroute-bin-"));
+  makeExecutable(binDir, "skillroute");
+  process.env.PATH = binDir;
   const resolved = resolveBridgeCommand("route", { moduleDir: installedDir });
   assert.equal(resolved.command, "skillroute");
   assert.deepEqual(resolved.args, ["bridge", "route"]);
   assert.equal(resolved.cwd, undefined);
   assert.equal(resolved.env.PYTHONPATH, undefined);
+});
+
+test("installed mode: uses uvx when skillroute is missing but uv is present", () => {
+  const binDir = mkdtempSync(path.join(os.tmpdir(), "skillroute-uvx-"));
+  makeExecutable(binDir, "uvx");
+  process.env.PATH = binDir;
+  const resolved = resolveBridgeCommand("route", { moduleDir: installedDir });
+  assert.equal(resolved.command, "uvx");
+  assert.deepEqual(resolved.args, ["--from", "skillroute", "skillroute", "bridge", "route"]);
+});
+
+test("installed mode: canonical skillroute when neither skillroute nor uvx is on PATH", () => {
+  const emptyDir = mkdtempSync(path.join(os.tmpdir(), "skillroute-empty-"));
+  process.env.PATH = emptyDir;
+  const resolved = resolveBridgeCommand("route", { moduleDir: installedDir });
+  assert.equal(resolved.command, "skillroute");
+  assert.deepEqual(resolved.args, ["bridge", "route"]);
 });
 
 test("installed mode: SKILLROUTE_PYTHON forces python -m skillroute without PYTHONPATH", () => {

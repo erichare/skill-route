@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,8 +20,10 @@ export interface BridgeCommand {
  *
  * In a repo checkout (or with SKILLROUTE_REPO_ROOT set) the bridge runs
  * `python -m skillroute` against the checkout's src tree. Outside a checkout
- * (npx / global install) it runs the `skillroute` console script from a
- * `pip install skillroute`, or `$SKILLROUTE_PYTHON -m skillroute` when set.
+ * (npx / global install) it prefers an installed `skillroute` console script
+ * (pipx / pip / uv tool), falls back to `uvx --from skillroute` (zero-install,
+ * requires uv) when that script is missing, or `$SKILLROUTE_PYTHON -m skillroute`
+ * when set.
  */
 export function resolveBridgeCommand(
   operation: BridgeOperation,
@@ -51,6 +53,22 @@ export function resolveBridgeCommand(
       env: { ...process.env }
     };
   }
+  // Prefer an installed `skillroute` console script (pipx / pip / uv tool), and
+  // fall back to `uvx --from skillroute` so a bare `npx @skillroute/mcp-server`
+  // (or the dsh bundle) needs no separate Python install. When neither is on
+  // PATH, keep the canonical command so callBridge's ENOENT handler still
+  // surfaces the install hint.
+  if (isOnPath("skillroute")) {
+    return { command: "skillroute", args: bridgeArgs, cwd: undefined, env: { ...process.env } };
+  }
+  if (isOnPath("uvx")) {
+    return {
+      command: "uvx",
+      args: ["--from", "skillroute", "skillroute", ...bridgeArgs],
+      cwd: undefined,
+      env: { ...process.env }
+    };
+  }
   return { command: "skillroute", args: bridgeArgs, cwd: undefined, env: { ...process.env } };
 }
 
@@ -61,6 +79,32 @@ function resolveRepoRoot(moduleDir: string): string | undefined {
   }
   const candidate = path.resolve(moduleDir, "../..");
   return existsSync(path.join(candidate, "src", "skillroute")) ? candidate : undefined;
+}
+
+/**
+ * Whether `command` names an executable on PATH. Used to pick the zero-install
+ * `uvx` fallback only when a real `skillroute` console script is not already
+ * installed; a PATH miss falls through to the canonical command so the caller's
+ * ENOENT handling still produces the install-hint error.
+ */
+function isOnPath(command: string): boolean {
+  const extensions =
+    process.platform === "win32"
+      ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").toLowerCase().split(";")
+      : [""];
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    const trimmed = dir.trim();
+    if (!trimmed) continue;
+    for (const ext of extensions) {
+      try {
+        accessSync(path.join(trimmed, command + ext), constants.X_OK);
+        return true;
+      } catch {
+        // keep looking
+      }
+    }
+  }
+  return false;
 }
 
 function bridgeTimeoutMs(): number {
@@ -109,8 +153,8 @@ export async function callBridge(operation: BridgeOperation, payload: unknown): 
           reject(
             new Error(
               `SkillRoute bridge command not found: ${command}. Install the Python ` +
-                "package (`pip install skillroute`) or point SKILLROUTE_PYTHON or " +
-                "SKILLROUTE_REPO_ROOT at a working SkillRoute environment."
+                "package (`pipx install skillroute`) or `uv` (`uvx --from skillroute skillroute`), " +
+                "or set SKILLROUTE_PYTHON / SKILLROUTE_REPO_ROOT to a working SkillRoute environment."
             )
           );
           return;

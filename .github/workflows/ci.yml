@@ -170,3 +170,35 @@ jobs:
 
       - name: Verify wheel bundles the web UI
         run: unzip -l dist/*.whl | grep -q "skillroute/_web/index.html"
+
+      - name: Validate dsh plugin bundle
+        working-directory: dsh-plugin
+        run: |
+          node -e "const p=require('./package.json'); const fs=require('fs'); if(!p.dsh?.bundle?.patch) throw new Error('missing dsh.bundle.patch'); if(!fs.existsSync(p.dsh.bundle.patch)) throw new Error('patch file missing: '+p.dsh.bundle.patch); console.log('dsh-plugin bundle ok')"
+          npm pack --dry-run
+
+  dsh-plugin:
+    name: dsh-plugin bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # Boot a real DeepSeek Harness and confirm the bundle's cordis.patch.yml
+      # composes into a profile tree. Runs against dsh@latest on purpose: dsh is
+      # a developer preview, so this job is the tripwire for its breaking changes
+      # to the bundle/patch format.
+      - name: Verify the bundle composes into a dsh profile
+        env:
+          DSH_HOME: ${{ runner.temp }}/dsh-home
+        run: |
+          rm -rf "$DSH_HOME"
+          npx -y @deepseek-ai/dsh --profile web --patch dsh-plugin/cordis.patch.yml --dump-config > "$RUNNER_TEMP/composed.yml"
+          grep -q "mcp-skillroute" "$RUNNER_TEMP/composed.yml"
+          grep -q "@deepseek-ai/dsh-mcp-client" "$RUNNER_TEMP/composed.yml"
+          grep -q "@skillroute/mcp-server" "$RUNNER_TEMP/composed.yml"
