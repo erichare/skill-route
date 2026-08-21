@@ -32,6 +32,7 @@ from skillroute.models import (
 )
 from skillroute.overlays import load_overlays, overlay_for_skill
 from skillroute.parser import discover_skill_files, parse_frontmatter, parse_skill_bundle
+from skillroute.spec import SkillSpecReport, summarize_reports, validate_skill_file
 
 SCHEMA_VERSION = 2
 
@@ -168,6 +169,42 @@ def default_catalog_path(base: Path | None = None) -> Path:
     return user_catalog_path()
 
 
+def _report_spec_summary(root: Path, reports: list[SkillSpecReport], *, spec_strict: bool) -> None:
+    """Surface Agent Skills spec findings from an indexing run.
+
+    Errors are named individually (a non-compliant bundle is not portable, so
+    it should never pass silently); warnings are counted only, with
+    `skillroute validate` as the tool for working through them. Everything
+    goes to stderr so stdout stays reserved for the command's actual output.
+    """
+    summary = summarize_reports(reports)
+    if not summary["errors"] and not summary["warnings"]:
+        return
+    shown = 0
+    for report in reports:
+        for finding in report.errors:
+            if shown >= 5:
+                break
+            print(
+                f"skillroute: spec error[{finding.field}] {report.skill_path}: "
+                f"{finding.message}",
+                file=sys.stderr,
+            )
+            shown += 1
+        if shown >= 5:
+            break
+    remaining = summary["errors"] - shown
+    if remaining > 0:
+        print(f"skillroute: ... and {remaining} more spec errors", file=sys.stderr)
+    action = "non-compliant bundles refused" if spec_strict else "bundles with errors indexed"
+    print(
+        f"skillroute: spec check on {root}: {summary['errors']} errors, "
+        f"{summary['warnings']} warnings across {summary['bundles']} bundles "
+        f"({action}; run `skillroute validate {root}` for details)",
+        file=sys.stderr,
+    )
+
+
 class Catalog:
     def __init__(self, path: Path | str | None = None) -> None:
         self.path = Path(path).expanduser().resolve() if path else default_catalog_path()
@@ -262,12 +299,27 @@ class Catalog:
             ).fetchone()
             return int(row[0]) if row else None
 
-    def index_root(self, root: Path | str) -> list[SkillRecord]:
+    def index_root(self, root: Path | str, *, spec_strict: bool = False) -> list[SkillRecord]:
         root_path = Path(root).expanduser().resolve()
         overlays = load_overlays(root_path)
         skills: list[SkillRecord] = []
+        spec_reports: list[SkillSpecReport] = []
         for skill_file in discover_skill_files(root_path):
             try:
+                # Every bundle is checked against the Agent Skills spec as it
+                # is indexed. Errors are reported (and, with spec_strict, the
+                # bundle is refused) because a non-compliant skill is not
+                # portable across clients; warnings are summarized only --
+                # `skillroute validate` is the tool for working through them.
+                report = validate_skill_file(skill_file)
+                spec_reports.append(report)
+                if spec_strict and report.errors:
+                    print(
+                        f"skillroute: refusing spec-noncompliant bundle {skill_file} "
+                        f"({len(report.errors)} errors)",
+                        file=sys.stderr,
+                    )
+                    continue
                 raw_text = skill_file.read_text(encoding="utf-8")
                 metadata, _ = parse_frontmatter(raw_text)
                 name = str(metadata.get("name") or skill_file.parent.name)
@@ -276,6 +328,7 @@ class Catalog:
             except (OSError, ValueError, KeyError) as exc:
                 # Isolate failures so one malformed SKILL.md cannot abort the run.
                 print(f"skillroute: skipping {skill_file}: {exc}", file=sys.stderr)
+        _report_spec_summary(root_path, spec_reports, spec_strict=spec_strict)
         self.replace_root(root_path, skills)
         for backend_ref in LocalTokenBackend().upsert_skills(skills):
             self.save_backend_ref(
