@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent Skills spec compliance.** SkillRoute now treats the
+  [Agent Skills](https://agentskills.io/home) open standard as a first-class
+  contract rather than an informal shape. New `skillroute validate [paths]`
+  checks SKILL.md bundles against the
+  [specification](https://agentskills.io/specification): the frontmatter MUSTs
+  (required `name`/`description`, the 64/1024/500-character bounds, the name
+  charset and parent-directory match, `metadata` as a string map,
+  `allowed-tools` as a space-separated string) are errors, and the
+  progressive-disclosure recommendations (description quality, body size,
+  reference depth) are warnings. `--strict` fails on warnings too, `--json`
+  emits a machine-readable report, and a non-zero exit on errors makes it
+  usable as a CI gate. See [docs/spec-compliance.md](docs/spec-compliance.md).
+- `skillroute index` validates every bundle it discovers. Errors are reported
+  on stderr and the bundle is indexed anyway by default; `--strict` refuses
+  non-compliant bundles so a catalog stays spec-clean by construction.
+- `skillroute inspect` surfaces the optional spec fields (`license`,
+  `compatibility`, `allowed-tools`, and the `metadata` map) when a bundle
+  declares them. They were already stored with the catalog record; now they
+  are visible.
 - `deepseek` harness: emit a `cordis.patch.yml` MCP insert for DeepSeek
   Harness (`dsh`), which loads MCP servers through its
   `@deepseek-ai/dsh-mcp-client` plugin. A new `dsh_cordis_patch` emitter
