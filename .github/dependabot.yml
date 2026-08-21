@@ -14,6 +14,17 @@ updates:
     directory: "/web"
     schedule:
       interval: weekly
+    ignore:
+      # typescript-eslint hard-errors at import time on TypeScript 7 ("typescript-eslint
+      # does not support TS 7.0"), and every published version -- canaries included --
+      # pins the peer `typescript >=4.8.4 <6.1.0`. There is no combination that lints,
+      # so a TS major bump here can only turn CI red. Support is tracked upstream for
+      # TS >=7.1 in typescript-eslint/typescript-eslint#10940; drop this ignore then.
+      #
+      # This is scoped to /web on purpose: /mcp has no typescript-eslint and is already
+      # on typescript ^7.0.2 with a green MCP job.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: uv
     directory: "/"
