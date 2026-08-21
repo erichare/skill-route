@@ -4,8 +4,27 @@ on:
   push:
     tags: ["v*"]
 
+  # A release can half-succeed: v0.4.0 reached PyPI, the GitHub release, and
+  # @skillroute/mcp-server, but @skillroute/dsh-plugin failed because it had no
+  # npm trusted publisher configured. Re-running the original run does not
+  # recover that -- it replays the steps that already succeeded, and every
+  # publisher refuses to overwrite an existing version, so the job dies before
+  # reaching the one that still needs to run. Recovery needs a dispatch that
+  # targets an existing tag, which is why every publish step below is a no-op
+  # when its version is already live.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish, e.g. v0.4.0"
+        required: true
+        type: string
+
 permissions:
   contents: read
+
+env:
+  # On a tag push this is the pushed tag; on a dispatch it is the requested one.
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -14,6 +33,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1
@@ -35,13 +56,13 @@ jobs:
       # reused, so there is no clean recovery.
       - name: Verify the tag matches all package versions
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${RELEASE_TAG#v}"
           py=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
           mcp_version=$(node -p "require('./mcp/package.json').version")
           plugin_version=$(node -p "require('./dsh-plugin/package.json').version")
           echo "tag=$tag pyproject=$py mcp=$mcp_version dsh-plugin=$plugin_version"
           if [ "$tag" != "$py" ] || [ "$tag" != "$mcp_version" ] || [ "$tag" != "$plugin_version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME disagrees with pyproject.toml ($py), mcp/package.json ($mcp_version), and/or dsh-plugin/package.json ($plugin_version)."
+            echo "::error::Tag $RELEASE_TAG disagrees with pyproject.toml ($py), mcp/package.json ($mcp_version), and/or dsh-plugin/package.json ($plugin_version)."
             exit 1
           fi
 
@@ -79,6 +100,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Download artifacts
         uses: actions/download-artifact@v8
@@ -90,9 +113,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refreshing its artifacts."
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi
 
   pypi:
     name: Publish to PyPI
@@ -114,6 +142,10 @@ jobs:
 
       - name: Publish via trusted publishing
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A PyPI version can never be reused, so re-publishing is always a
+          # no-op rather than something worth failing the job over.
+          skip-existing: true
 
   npm:
     name: Publish npm packages
@@ -127,6 +159,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       # Trusted publishing needs npm >= 11.5.1. Node 22 bundles npm 10.x even at
       # its latest patch, so it cannot be used here; Node 24 bundles 11.17+,
@@ -146,8 +180,8 @@ jobs:
         working-directory: mcp
         run: |
           npm ci
-          npm publish
+          ../.github/scripts/npm-publish-if-new.sh
 
       - name: Publish dsh plugin
         working-directory: dsh-plugin
-        run: npm publish
+        run: ../.github/scripts/npm-publish-if-new.sh
