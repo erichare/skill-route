@@ -225,3 +225,27 @@ def test_index_root_skips_malformed_skill(tmp_path: Path, capsys) -> None:
     assert "good-skill" in names
     assert len(skills) == 1
     assert "skipping" in capsys.readouterr().err
+
+
+def test_index_root_spec_strict_refuses_noncompliant_bundles(tmp_path: Path, capsys) -> None:
+    compliant = tmp_path / "compliant-skill"
+    compliant.mkdir()
+    (compliant / "SKILL.md").write_text(
+        "---\nname: compliant-skill\n"
+        "description: A compliant skill with a real description of what it does.\n---\n\n# C\n",
+        encoding="utf-8",
+    )
+    noncompliant = tmp_path / "wrong-dir"
+    noncompliant.mkdir()
+    (noncompliant / "SKILL.md").write_text(
+        "---\nname: different-name\ndescription: Name does not match the parent directory.\n---\n",
+        encoding="utf-8",
+    )
+
+    catalog = Catalog(tmp_path / "catalog.db")
+    skills = catalog.index_root(tmp_path, spec_strict=True)
+
+    assert [skill.name for skill in skills] == ["compliant-skill"]
+    err = capsys.readouterr().err
+    assert "refusing spec-noncompliant bundle" in err
+    assert "spec check" in err

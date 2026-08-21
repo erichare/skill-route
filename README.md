@@ -37,6 +37,25 @@ SkillRoute treats your skill library like a real corpus:
 - **Local first** — one SQLite file, no services to run. Add the Astra DB
   backend when you outgrow it.
 
+## Built on the Agent Skills open standard
+
+SkillRoute is built around [Agent Skills](https://agentskills.io/home), the
+open standard for `SKILL.md` bundles. Every bundle you index is checked
+against the [specification](https://agentskills.io/specification), and a
+standalone validator doubles as a CI gate for skill authors:
+
+```bash
+uv run skillroute validate examples/skills          # report
+uv run skillroute validate --strict                 # fail on warnings too
+uv run skillroute index --root examples/skills --strict   # refuse non-compliant bundles
+```
+
+```text
+Spec check (https://agentskills.io/specification): 4 bundles, 0 errors, 0 warnings
+```
+
+See [Spec Compliance](docs/spec-compliance.md) for the full rule set.
+
 ## Quick start
 
 One guided line (confirms each step, sets up detected agent clients with
@@ -165,6 +184,7 @@ flowchart LR
 | `skillroute route "<request>"` | Ranked skills with confidence and evidence |
 | `skillroute search "<query>"` | Hybrid search across the catalog |
 | `skillroute inspect <skill>` | Metadata, relationships, excerpts, sources |
+| `skillroute validate [paths]` | Check bundles against the Agent Skills spec |
 | `skillroute traces list` | Inspect past routing decisions |
 | `skillroute eval run` | Golden-route evals against expected outcomes |
 | `skillroute backend status` | Retrieval backend health |
@@ -177,6 +197,7 @@ flowchart LR
 | Guide | |
 | --- | --- |
 | [Getting Started](docs/getting-started.md) | Index, route, and inspect in five minutes |
+| [Spec Compliance](docs/spec-compliance.md) | Validate bundles against the Agent Skills spec |
 | [Harness Packs](docs/harnesses.md) | Supported harnesses, install modes, and how to add one |
 | [Agent Setup](docs/agent-setup.md) | Wire SkillRoute into your agent clients |
 | [MCP Server](docs/mcp-server.md) | Tools, transport, and configuration |

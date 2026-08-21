@@ -62,6 +62,13 @@ from skillroute.metadata import (
 )
 from skillroute.models import to_jsonable
 from skillroute.routing import Router
+from skillroute.spec import (
+    SPEC_URL,
+    render_report_lines,
+    report_to_dict,
+    summarize_reports,
+    validate_target,
+)
 from skillroute.tuning import tune_weights
 
 # Resolved once at import so argparse `choices` stay in sync with the manifests
@@ -89,6 +96,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     index_parser = subparsers.add_parser("index", help="Index SKILL.md bundles under a root")
     index_parser.add_argument("--root", type=Path, required=True)
+    index_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Refuse bundles that fail the Agent Skills spec check instead of "
+        "indexing them with a warning",
+    )
     add_backend_argument(index_parser)
     index_parser.set_defaults(func=cmd_index)
 
@@ -116,6 +129,25 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("skill_id")
     inspect_parser.add_argument("--json", action="store_true", dest="as_json")
     inspect_parser.set_defaults(func=cmd_inspect)
+
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Check SKILL.md bundles against the Agent Skills spec (agentskills.io)",
+    )
+    validate_parser.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        metavar="PATH",
+        help="SKILL.md files, bundle directories, or roots to scan (default: .)",
+    )
+    validate_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail on warnings as well as errors",
+    )
+    validate_parser.add_argument("--json", action="store_true", dest="as_json")
+    validate_parser.set_defaults(func=cmd_validate)
 
     eval_parser = subparsers.add_parser("eval", help="Run eval commands")
     eval_subparsers = eval_parser.add_subparsers(dest="eval_command", required=True)
@@ -429,7 +461,7 @@ def router_from_args(catalog: Catalog, args: argparse.Namespace) -> Router:
 def cmd_index(args: argparse.Namespace) -> None:
     catalog = catalog_from_args(args)
     backend = backend_from_args(args)
-    skills = catalog.index_root(args.root)
+    skills = catalog.index_root(args.root, spec_strict=args.strict)
     print(f"Indexed {len(skills)} skills into {catalog.path}")
     refs: list[dict[str, Any]]
     if isinstance(backend, SqliteFTS5Backend):
@@ -492,6 +524,12 @@ def cmd_inspect(args: argparse.Namespace) -> None:
     print(f"{skill.name} ({skill.id})")
     print(skill.description)
     print(f"path: {skill.skill_path}")
+    for spec_field in ("license", "compatibility", "allowed-tools"):
+        value = skill.metadata.get(spec_field)
+        if value:
+            print(f"{spec_field}: {value}")
+    if isinstance(skill.metadata.get("metadata"), dict):
+        print(f"metadata: {json.dumps(skill.metadata['metadata'], sort_keys=True)}")
     if skill.tags:
         print(f"tags: {', '.join(skill.tags)}")
     if skill.facets:
@@ -504,6 +542,39 @@ def cmd_inspect(args: argparse.Namespace) -> None:
         print("excerpts:")
         for excerpt in skill.excerpts:
             print(f"  [{excerpt.kind}] {excerpt.text}")
+
+
+def cmd_validate(args: argparse.Namespace) -> None:
+    paths = args.paths or [Path(".")]
+    reports = []
+    for path in paths:
+        reports.extend(validate_target(path))
+    summary = summarize_reports(reports)
+    if args.as_json:
+        print_json(
+            {
+                "spec": SPEC_URL,
+                "summary": summary,
+                "reports": [report_to_dict(report) for report in reports],
+            }
+        )
+    else:
+        if not reports:
+            print(f"No SKILL.md bundles found under: {', '.join(str(path) for path in paths)}")
+        for report in reports:
+            lines = render_report_lines(report)
+            if lines:
+                print(report.skill_path)
+                for line in lines:
+                    print(line)
+        print(
+            f"Spec check ({SPEC_URL}): {summary['bundles']} bundles, "
+            f"{summary['errors']} errors, {summary['warnings']} warnings"
+        )
+    # Non-zero exit makes validate usable as a CI gate; --strict also fails
+    # on warnings, for libraries that want the recommendations enforced.
+    if summary["errors"] or (args.strict and summary["warnings"]):
+        raise SystemExit(1)
 
 
 def cmd_eval_run(args: argparse.Namespace) -> None:

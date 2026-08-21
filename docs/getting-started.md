@@ -54,6 +54,15 @@ This creates `~/.skillroute/catalog.db` unless a `.skillroute/catalog.db` alread
 exists in the current directory, in which case that one is used. Override with
 `--catalog` or set `SKILLROUTE_CATALOG_PATH`.
 
+Every bundle is checked against the [Agent Skills
+specification](https://agentskills.io/specification) as it is indexed; run the
+validator on its own for the full report, or pass `--strict` to refuse
+non-compliant bundles:
+
+```bash
+uv run skillroute validate examples/skills
+```
+
 ## Route A Request
 
 ```bash

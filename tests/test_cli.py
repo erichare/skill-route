@@ -991,3 +991,107 @@ def test_ui_reports_a_missing_extra_instead_of_an_import_traceback(
     monkeypatch.setattr(builtins, "__import__", fail_ui_server)
     with pytest.raises(SystemExit, match=r"skillroute\[ui\]"):
         main(["--catalog", str(tmp_path / "c.db"), "ui", "--no-open"])
+
+
+def _write_spec_skill(root: Path, directory: str, text: str) -> None:
+    bundle = root / directory
+    bundle.mkdir(parents=True, exist_ok=True)
+    (bundle / "SKILL.md").write_text(text, encoding="utf-8")
+
+
+GOOD_SPEC_SKILL = (
+    "---\n"
+    "name: {name}\n"
+    "description: Extracts text and tables from PDF files. Use when handling PDFs.\n"
+    "---\n\n# {name}\n\nInstructions.\n"
+)
+
+
+def test_cli_validate_clean_root_exits_zero(tmp_path: Path, capsys) -> None:
+    _write_spec_skill(tmp_path, "pdf-processing", GOOD_SPEC_SKILL.format(name="pdf-processing"))
+    main(["validate", str(tmp_path)])
+    output = capsys.readouterr().out
+    assert "1 bundles, 0 errors, 0 warnings" in output
+
+
+def test_cli_validate_fails_on_errors(tmp_path: Path, capsys) -> None:
+    _write_spec_skill(tmp_path, "Bad_Name", "---\nname: Bad_Name\n---\n\n# Bad\n")
+    with pytest.raises(SystemExit) as exc_info:
+        main(["validate", str(tmp_path)])
+    assert exc_info.value.code == 1
+    output = capsys.readouterr().out
+    assert "error[name]" in output
+    assert "error[description]" in output
+    assert "agentskills.io/specification" in output
+
+
+def test_cli_validate_strict_fails_on_warnings(tmp_path: Path) -> None:
+    _write_spec_skill(
+        tmp_path,
+        "pdf-processing",
+        GOOD_SPEC_SKILL.format(name="pdf-processing").replace(
+            "Extracts text and tables from PDF files. Use when handling PDFs.", "Helps with PDFs."
+        ),
+    )
+    main(["validate", str(tmp_path)])  # warnings alone do not fail
+    with pytest.raises(SystemExit) as exc_info:
+        main(["validate", str(tmp_path), "--strict"])
+    assert exc_info.value.code == 1
+
+
+def test_cli_validate_json(tmp_path: Path, capsys) -> None:
+    _write_spec_skill(tmp_path, "pdf-processing", GOOD_SPEC_SKILL.format(name="pdf-processing"))
+    main(["validate", str(tmp_path), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["spec"] == "https://agentskills.io/specification"
+    assert payload["summary"]["bundles"] == 1
+    assert payload["reports"][0]["ok"] is True
+
+
+def test_cli_validate_defaults_to_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    _write_spec_skill(tmp_path, "pdf-processing", GOOD_SPEC_SKILL.format(name="pdf-processing"))
+    monkeypatch.chdir(tmp_path)
+    main(["validate", "--strict"])
+    assert "0 errors, 0 warnings" in capsys.readouterr().out
+
+
+def test_cli_index_warns_but_indexes_noncompliant_bundles(tmp_path: Path, capsys) -> None:
+    root = tmp_path / "skills"
+    _write_spec_skill(root, "ok-skill", GOOD_SPEC_SKILL.format(name="ok-skill"))
+    _write_spec_skill(root, "bad-skill", "# no frontmatter\n")
+    main(["--catalog", str(tmp_path / "catalog.db"), "index", "--root", str(root)])
+    captured = capsys.readouterr()
+    assert "Indexed 2 skills" in captured.out
+    assert "spec check" in captured.err
+
+
+def test_cli_index_strict_refuses_noncompliant_bundles(tmp_path: Path, capsys) -> None:
+    root = tmp_path / "skills"
+    _write_spec_skill(root, "ok-skill", GOOD_SPEC_SKILL.format(name="ok-skill"))
+    _write_spec_skill(root, "bad-skill", "# no frontmatter\n")
+    main(["--catalog", str(tmp_path / "catalog.db"), "index", "--root", str(root), "--strict"])
+    captured = capsys.readouterr()
+    assert "Indexed 1 skills" in captured.out
+    assert "refusing spec-noncompliant bundle" in captured.err
+
+
+def test_cli_inspect_surfaces_spec_fields(tmp_path: Path, capsys) -> None:
+    root = tmp_path / "skills"
+    _write_spec_skill(
+        root,
+        "pdf-processing",
+        GOOD_SPEC_SKILL.format(name="pdf-processing").replace(
+            "---\n\n",
+            "license: Apache-2.0\ncompatibility: Requires Python 3.14+\n"
+            "metadata:\n  author: example-org\n---\n\n",
+            1,
+        ),
+    )
+    catalog_path = tmp_path / "catalog.db"
+    main(["--catalog", str(catalog_path), "index", "--root", str(root)])
+    capsys.readouterr()
+    main(["--catalog", str(catalog_path), "inspect", "pdf-processing"])
+    output = capsys.readouterr().out
+    assert "license: Apache-2.0" in output
+    assert "compatibility: Requires Python 3.14+" in output
+    assert 'metadata: {"author": "example-org"}' in output
