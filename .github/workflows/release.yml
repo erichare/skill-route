@@ -124,7 +124,13 @@ jobs:
 
   pypi:
     name: Publish to PyPI
-    if: vars.PYPI_PUBLISH == 'true'
+    # Tag pushes only. The `pypi` environment restricts deployments to `tag: v*`,
+    # and a dispatch runs with the ref it was dispatched from (a branch), so on a
+    # dispatch GitHub rejects this job before any step runs -- a red job that
+    # never had a chance. Recovering a failed PyPI publish therefore needs a new
+    # tag, not a dispatch; the npm and GitHub-release paths are the ones a
+    # dispatch can repair.
+    if: vars.PYPI_PUBLISH == 'true' && github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
@@ -176,12 +182,31 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
+      # These guards are inline on purpose. A dispatch checks out the tag being
+      # published, so anything read from the working tree is the tree as of that
+      # tag -- a helper script added after it simply is not there. Keeping the
+      # logic in the workflow means it always matches the workflow being run.
       - name: Publish MCP server
         working-directory: mcp
         run: |
           npm ci
-          ../.github/scripts/npm-publish-if-new.sh
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on the registry; skipping publish."
+          else
+            echo "Publishing $name@$version"
+            npm publish
+          fi
 
       - name: Publish dsh plugin
         working-directory: dsh-plugin
-        run: ../.github/scripts/npm-publish-if-new.sh
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on the registry; skipping publish."
+          else
+            echo "Publishing $name@$version"
+            npm publish
+          fi
