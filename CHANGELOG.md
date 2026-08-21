@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-21
+
 ### Added
 
 - **Agent Skills spec compliance.** SkillRoute now treats the
@@ -83,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `skillroute stats` on a catalog that was never indexed reports zero routes
   instead of failing with a missing-table SQL error.
 
-[Unreleased]: https://github.com/erichare/skillroute/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/erichare/skillroute/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/erichare/skillroute/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/erichare/skillroute/compare/v0.2.0...v0.3.0
 
 ## [0.2.0] - 2026-08-13
