@@ -1,0 +1,55 @@
+{
+  "lockfileVersion": 1,
+  "toolprintVersion": "0.3.0",
+  "generatedAt": "2026-08-22T18:10:46.339Z",
+  "servers": {
+    "skillroute": {
+      "transport": "stdio",
+      "source": "node mcp/build/index.js",
+      "tools": {
+        "skillroute.inspect_skill": {
+          "hash": "sha256:a983074253a7f565de62503f3a45945ec26b093c5187c7ef1084e8f7afc4608f",
+          "description": "Fetch metadata, relationships, excerpts, and source references for one skill."
+        },
+        "skillroute.route": {
+          "hash": "sha256:fc8d292433a6ac82bd96d9d5e886997a4b2c37c691b3c6f97cdf5ab6d6cd95eb",
+          "description": "Return ranked skills, reasons, confidence, evidence snippets, suggested order, and clarification questions."
+        },
+        "skillroute.search": {
+          "hash": "sha256:3957a238f483a50e158552fa89f98988eaea404d817b46956394bbead3aeb1ae",
+          "description": "Search indexed skills using hybrid metadata, lexical, and selected backend retrieval signals."
+        }
+      },
+      "prompts": {},
+      "resources": {},
+      "resourceTemplates": {},
+      "skills": {}
+    },
+    "skills:examples/skills": {
+      "transport": "skills",
+      "source": "examples/skills",
+      "tools": {},
+      "prompts": {},
+      "resources": {},
+      "resourceTemplates": {},
+      "skills": {
+        "astra-vector-backend": {
+          "hash": "sha256:a9ad068b479ddcd3a0ae66eaf0a285a8d84e05b75c7ffb180e46faaa107f7360",
+          "description": "Design Astra DB Data API and vector-search backends for retrieval, metadata filtering, and LangChain-compatible stores."
+        },
+        "mcp-server-patterns": {
+          "hash": "sha256:66b2d6ec4ea00277ce903539e292c4486028113ad98322f52be9f64ee2edb3c1",
+          "description": "Build MCP servers with Node and TypeScript using tools, resources, Zod schemas, and stdio transport."
+        },
+        "python-patterns": {
+          "hash": "sha256:189505fbd1bff402ebca236699b4e4a54e7d90d745a152d51a47500d524cebf7",
+          "description": "Write maintainable Python packages with type hints, dataclasses, pathlib, and clear module boundaries."
+        },
+        "python-testing": {
+          "hash": "sha256:9927334a866f147f161062bf15c8cf9fd1e73903bc7397790d0cdce97d22ddff",
+          "description": "Test Python applications with pytest fixtures, parametrization, temporary paths, and regression coverage."
+        }
+      }
+    }
+  }
+}

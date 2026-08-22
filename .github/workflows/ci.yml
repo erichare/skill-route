@@ -140,6 +140,40 @@ jobs:
         working-directory: mcp
         run: npm run smoke
 
+  trust:
+    name: Trust (toolprint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Install MCP dependencies
+        working-directory: mcp
+        run: npm ci
+
+      - name: Build MCP server
+        working-directory: mcp
+        run: npm run build
+
+      # SkillRoute ships an MCP server and a library of skill bundles, so it
+      # gates both against its own committed toolprint.lock. If a tool
+      # description or a SKILL.md body changes, this fails and the lockfile diff
+      # goes through review. See docs/security.md.
+      # Pinned: `--skills` requires toolprint >= 0.3.0, and pinning keeps a
+      # future toolprint release from turning this gate red on its own.
+      - name: Verify MCP server capabilities against toolprint.lock
+        run: npx --yes toolprint@0.3.0 scan --config toolprint.mcp.json --fail-on high --no-color
+
+      - name: Verify example skill bundles against toolprint.lock
+        run: npx --yes toolprint@0.3.0 scan --skills examples/skills --fail-on high --no-color
+
   package:
     name: Package
     runs-on: ubuntu-latest

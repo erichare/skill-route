@@ -18,6 +18,7 @@
   <a href="#install">Install</a> ·
   <a href="#what-you-get">What you get</a> ·
   <a href="#skill-atlas">Skill Atlas</a> ·
+  <a href="#trust">Trust</a> ·
   <a href="#route-observability">Observability</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#docs">Docs</a>
@@ -164,6 +165,25 @@ Spec check (https://agentskills.io/specification): 4 bundles, 0 errors, 0 warnin
 
 See [Spec Compliance](docs/spec-compliance.md) for the full rule set.
 
+## Trust
+
+Spec compliance is a correctness check, not a security one — a bundle can be perfectly valid and
+still tell your agent to read `~/.aws/credentials`. A skill's body is instructions the model obeys,
+so a skill library is a supply chain, and the nastiest failure is the **rug-pull**: a bundle you
+reviewed is edited later, its `name` and `description` untouched, and nothing in the index looks
+different.
+
+[toolprint](https://github.com/jestatsio/toolprint) closes that gap. It hashes each bundle —
+frontmatter *and* body — into a committed lockfile, and scans the prose for injection patterns:
+
+```bash
+npx toolprint pin  --skills ./skills     # commit toolprint.lock
+npx toolprint scan --skills ./skills     # a body-only edit now fails
+```
+
+SkillRoute gates itself the same way: `toolprint.lock` pins this repo's own MCP server and example
+skill library, and CI verifies both on every pull request. See [Security](docs/security.md).
+
 ## Skill Atlas
 
 Your whole library, mapped. Facet nebula, skill graph, and matrix views; filters for domains,
@@ -228,6 +248,7 @@ flowchart LR
 | --- | --- |
 | [Getting Started](docs/getting-started.md) | Index, route, and inspect in five minutes |
 | [Spec Compliance](docs/spec-compliance.md) | Validate bundles against the Agent Skills spec |
+| [Security](docs/security.md) | Threat model, and pinning skills against rug-pulls |
 | [Harness Packs](docs/harnesses.md) | Supported harnesses, install modes, and how to add one |
 | [Agent Setup](docs/agent-setup.md) | Wire SkillRoute into your agent clients |
 | [MCP Server](docs/mcp-server.md) | Tools, transport, and configuration |
