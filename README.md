@@ -1,81 +1,84 @@
-<div align="center">
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="SkillRoute — local-first skill routing for agent builders" width="100%">
+</p>
 
-# 🧭 SkillRoute
+<p align="center">
+  <a href="https://github.com/erichare/skillroute/actions/workflows/ci.yml"><img src="https://github.com/erichare/skillroute/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pypi.org/project/skillroute/"><img src="https://img.shields.io/pypi/v/skillroute?label=pypi&color=3776AB" alt="PyPI"></a>
+  <a href="https://www.npmjs.com/package/@skillroute/mcp-server"><img src="https://img.shields.io/npm/v/@skillroute/mcp-server?label=npm&color=CB3837" alt="npm"></a>
+  <a href="https://pypi.org/project/skillroute/"><img src="https://img.shields.io/pypi/pyversions/skillroute?color=306998" alt="Python 3.11+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+</p>
 
-### Local-first skill routing for agent builders
+<p align="center">
+  <b>15 harnesses · 3 MCP tools · 4 retrieval backends · full <code>SKILL.md</code> bundle indexing · zero runtime dependencies</b>
+</p>
 
-Index full `SKILL.md` bundles into a local catalog, route any request to ranked
-skills with confidence and evidence, and serve it all to your agents over MCP.
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#what-you-get">What you get</a> ·
+  <a href="#skill-atlas">Skill Atlas</a> ·
+  <a href="#route-observability">Observability</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#docs">Docs</a>
+</p>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/erichare/skillroute/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/erichare/skillroute/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](pyproject.toml)
-[![MCP](https://img.shields.io/badge/MCP-stdio%20server-8A2BE2?style=flat-square)](docs/mcp-server.md)
+> **Built on the [Agent Skills](https://agentskills.io/home) open standard.** Every bundle SkillRoute
+> indexes is checked against the [specification](https://agentskills.io/specification), and the
+> standalone validator doubles as a CI gate for skill authors.
 
-[Quick start](#quick-start) · [Skill Atlas](#skill-atlas) · [Agent setup](#plug-it-into-your-agent) · [How it works](#how-it-works) · [Docs](#docs)
+Most agents choose a skill from a one-line description and hope for the best. SkillRoute treats your
+skill library like a real corpus: it parses complete `SKILL.md` bundles — headings, triggers,
+templates, relationships — ranks them with **confidence and source evidence**, returns a
+clarification question instead of a guess when the route is uncertain, and serves the whole thing to
+any agent over MCP. One SQLite file, no services to run; add the Astra DB backend when you outgrow it.
 
-<br>
+<p align="center">
+  <img src="docs/assets/screenshot-skill-atlas.png" alt="Skill Atlas mapping 712 skills as an interactive galaxy, with facet filters, relationship types, and a live route preview" width="92%">
+</p>
 
-<img src="docs/assets/screenshot-skill-atlas.png" alt="Skill Atlas mapping 712 skills as an interactive galaxy, with facet filters, relationship types, and a live route preview" width="90%">
+<p align="center">
+  <sub><b>Skill Atlas</b> — every skill in your library on one interactive map, with live route previews.</sub>
+</p>
 
-<sub><b>Skill Atlas</b> — every skill in your library on one interactive map, with live route previews.</sub>
+## Install
 
-</div>
+Three ways in — pick one.
 
----
+<p align="center">
+  <a href="#one-line-installer"><img src="docs/assets/install-quickstart.svg" alt="Quick start — one-line install" width="32%"></a>
+  <a href="#from-pypi-or-npm"><img src="docs/assets/install-packages.svg" alt="Install from PyPI or npm" width="32%"></a>
+  <a href="#wire-up-your-agent"><img src="docs/assets/install-harness.svg" alt="Wire up your agent — 15 harnesses" width="32%"></a>
+</p>
 
-## Why
-
-Most agents choose skills from a one-line description and hope for the best.
-SkillRoute treats your skill library like a real corpus:
-
-- **Full-bundle indexing** — parses complete `SKILL.md` bundles (headings,
-  triggers, templates, relationships), not just frontmatter.
-- **Explainable routes** — every ranked skill carries confidence, reasons, and
-  source evidence. Uncertain routes return clarification questions instead of
-  guesses.
-- **Local first** — one SQLite file, no services to run. Add the Astra DB
-  backend when you outgrow it.
-
-## Built on the Agent Skills open standard
-
-SkillRoute is built around [Agent Skills](https://agentskills.io/home), the
-open standard for `SKILL.md` bundles. Every bundle you index is checked
-against the [specification](https://agentskills.io/specification), and a
-standalone validator doubles as a CI gate for skill authors:
-
-```bash
-uv run skillroute validate examples/skills          # report
-uv run skillroute validate --strict                 # fail on warnings too
-uv run skillroute index --root examples/skills --strict   # refuse non-compliant bundles
-```
-
-```text
-Spec check (https://agentskills.io/specification): 4 bundles, 0 errors, 0 warnings
-```
-
-See [Spec Compliance](docs/spec-compliance.md) for the full rule set.
-
-## Quick start
-
-One guided line (confirms each step, sets up detected agent clients with
-backups):
+### One-line installer
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/erichare/skillroute/main/scripts/install.sh | bash
 ```
 
-Or hands-on, in a checkout:
+Confirms each step before it runs: clones or updates SkillRoute, installs dependencies, builds the
+MCP server and Skill Atlas, indexes starter skills, then detects your agent clients and offers setup
+for each one (JSON edits are backed up first). Add `-s -- --yes` for unattended installs.
+
+### From PyPI or npm
 
 ```bash
-uv run skillroute index --root examples/skills
-uv run skillroute route "Build an MCP server that exposes routing tools"
+uv tool install "skillroute[ui]"     # or: pipx install "skillroute[ui]"
+skillroute index --root ./skills
+skillroute route "Build an MCP server that exposes routing tools"
 ```
+
+Zero-install works too — `uvx --from skillroute skillroute route "…"`. The MCP server is published
+separately as [`@skillroute/mcp-server`](https://www.npmjs.com/package/@skillroute/mcp-server) if you
+want to run it straight from npm.
 
 ![Ranked route output with confidence, reasons, and evidence](docs/assets/screenshot-route.svg)
 
 <details>
-<summary>Actual text output</summary>
+<summary><b>Actual text output</b></summary>
+
+<br>
 
 ```text
 Ranked skills:
@@ -93,66 +96,94 @@ Ranked skills:
 
 </details>
 
-The default catalog lives at `~/.skillroute/catalog.db`. A `.skillroute/catalog.db`
-in the working directory is used instead when one already exists, so existing
-project catalogs keep working; point elsewhere with
-`--catalog <path>` or `SKILLROUTE_CATALOG_PATH`.
+The default catalog lives at `~/.skillroute/catalog.db`. A `.skillroute/catalog.db` in the working
+directory is used instead when one already exists, so existing project catalogs keep working; point
+elsewhere with `--catalog <path>` or `SKILLROUTE_CATALOG_PATH`.
 
-## Skill Atlas
+### Wire up your agent
 
-Your whole library, mapped. Facet nebula, skill graph, and matrix views;
-filters for domains, relationship types, orphans, and conflicts; a detail panel
-with excerpts and source references; and a route preview bar that highlights
-the chosen path through the graph.
+The bundled MCP server exposes three tools over stdio — `skillroute.route`, `skillroute.search`, and
+`skillroute.inspect_skill`. One command writes the config for your harness:
 
 ```bash
-uv run skillroute ui
+skillroute harness install claude-code
+skillroute harness detect        # what is installed here
+skillroute harness list          # everything SkillRoute knows about
 ```
 
-## Plug it into your agent
+`amp` · `claude-code` · `claude-desktop` · `codex` · `cursor` · `deepseek` · `gemini-cli` · `goose` ·
+`hermes` · `ibm-bob` · `opencode` · `pi` · `vscode` · `windsurf` · `zed`
 
-The bundled MCP server exposes three tools over stdio — `skillroute.route`,
-`skillroute.search`, and `skillroute.inspect_skill`. One command writes the
-config for your harness (JSON edits are backed up first):
+Each one is a single declarative manifest in [`harnesses/`](harnesses), so adding a new tool is
+usually a data change with no Python — see [Harness Packs](docs/harnesses.md).
 
-```bash
-uv run skillroute harness install claude-code
-uv run skillroute harness detect        # what is installed here
-uv run skillroute harness list          # everything SkillRoute knows about
-```
+<details>
+<summary><b>DeepSeek Harness</b> — installs as a bundle instead</summary>
 
-Supported harnesses: `amp` · `claude-code` · `claude-desktop` · `codex` ·
-`cursor` · `deepseek` · `gemini-cli` · `goose` · `hermes` · `ibm-bob` · `opencode` · `pi` ·
-`vscode` · `windsurf` · `zed`
-
-Each one is a single declarative manifest in [`harnesses/`](harnesses), so
-adding a new tool is usually a data change with no Python — see
-[Harness Packs](docs/harnesses.md).
-
-**DeepSeek Harness** installs as a bundle instead, with one command:
+<br>
 
 ```bash
 dsh plugin --profile web add @skillroute/dsh-plugin
 ```
 
-The bundle registers SkillRoute's MCP server through dsh's built-in
-`@deepseek-ai/dsh-mcp-client`, giving agents `mcp__skillroute__route`,
-`mcp__skillroute__search`, and `mcp__skillroute__inspect_skill`. The Python
-core is zero-install when `uv` is present (the bridge runs
-`uvx --from skillroute`); otherwise `pipx install skillroute` once. See
+The bundle registers SkillRoute's MCP server through dsh's built-in `@deepseek-ai/dsh-mcp-client`,
+giving agents `mcp__skillroute__route`, `mcp__skillroute__search`, and
+`mcp__skillroute__inspect_skill`. The Python core is zero-install when `uv` is present (the bridge
+runs `uvx --from skillroute`); otherwise `pipx install skillroute` once. See
 [`dsh-plugin/README.md`](dsh-plugin/README.md).
+
+</details>
+
+## What you get
+
+| Component | What it does | Ships in |
+| --- | --- | --- |
+| **CLI** `skillroute` | Index, route, search, inspect, validate, traces, evals, harness setup | PyPI wheel |
+| **MCP server** | Three stdio tools: `route` · `search` · `inspect_skill` | npm `@skillroute/mcp-server`, bundled in the wheel |
+| **Skill Atlas** | FastAPI + React Flow graph explorer, facet nebula and matrix views | wheel, `[ui]` extra |
+| **Harness packs** | 15 declarative manifests, 6 install modes (`mcp` · `acp` · `skills` · `hook` · `extension` · `router_skill`) | wheel |
+| **Retrieval backends** | local token · SQLite FTS5 (BM25) · Astra DB Data API · LangChain adapter | wheel |
+| **Spec validator** | Agent Skills compliance check, usable as a CI gate | wheel |
+| **DeepSeek bundle** | dsh plugin wiring the MCP server into DeepSeek Harness | npm `@skillroute/dsh-plugin` |
+
+**Zero runtime dependencies.** Routing, indexing, search, and harness setup are stdlib-only. FastAPI
+and uvicorn live in the `ui` extra, so an install that never opens the Skill Atlas never fetches a
+Rust extension.
+
+## Spec compliance
+
+```bash
+skillroute validate examples/skills               # report
+skillroute validate --strict                      # fail on warnings too
+skillroute index --root examples/skills --strict  # refuse non-compliant bundles
+```
+
+```text
+Spec check (https://agentskills.io/specification): 4 bundles, 0 errors, 0 warnings
+```
+
+See [Spec Compliance](docs/spec-compliance.md) for the full rule set.
+
+## Skill Atlas
+
+Your whole library, mapped. Facet nebula, skill graph, and matrix views; filters for domains,
+relationship types, orphans, and conflicts; a detail panel with excerpts and source references; and a
+route preview bar that highlights the chosen path through the graph.
+
+```bash
+skillroute ui
+```
 
 ## Route observability
 
-Every route is a trace you can replay: inputs, candidates, scores, and the
-evidence behind each decision. Golden-route evals keep your catalog honest as
-it grows.
+Every route is a trace you can replay: inputs, candidates, scores, and the evidence behind each
+decision. Golden-route evals keep your catalog honest as it grows.
 
 ![Backend status and route trace inspection](docs/assets/screenshot-traces.svg)
 
 ```bash
-uv run skillroute traces list
-uv run skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
+skillroute traces list
+skillroute eval run --fresh --index-root examples/skills --cases examples/evals/golden_routes.json
 ```
 
 ## How it works
@@ -169,12 +200,10 @@ flowchart LR
 ```
 
 - **Python core** — parsing, catalog persistence, hybrid routing, evals, CLI.
-- **Skill Atlas** — FastAPI server + React Flow frontend, bundled into the
-  Python wheel.
+- **Skill Atlas** — FastAPI server + React Flow frontend, bundled into the Python wheel.
 - **MCP server** — TypeScript stdio transport around the Python bridge.
-- **Backends** — local token retrieval by default; SQLite FTS5 (BM25) for
-  larger local libraries, Astra DB Data API and a LangChain-compatible adapter
-  when you want more.
+- **Backends** — local token retrieval by default; SQLite FTS5 (BM25) for larger local libraries,
+  Astra DB Data API and a LangChain-compatible adapter when you want more.
 
 ## CLI at a glance
 
@@ -187,6 +216,7 @@ flowchart LR
 | `skillroute validate [paths]` | Check bundles against the Agent Skills spec |
 | `skillroute traces list` | Inspect past routing decisions |
 | `skillroute eval run` | Golden-route evals against expected outcomes |
+| `skillroute stats` | Routing quality and skill-library health |
 | `skillroute backend status` | Retrieval backend health |
 | `skillroute harness list` | Every harness SkillRoute supports, and its modes |
 | `skillroute harness install <harness>` | Configure a harness to use SkillRoute |
@@ -208,7 +238,10 @@ flowchart LR
 | [Astra Data API Backend](docs/astra-backend.md) | Remote vector retrieval |
 | [Changelog](CHANGELOG.md) | Release history |
 
-## Development
+<details>
+<summary><b>Development</b> — dev setup, checks, contributing</summary>
+
+<br>
 
 ```bash
 uv sync --extra dev   # dev includes the `ui` extra
@@ -216,11 +249,14 @@ uv run --extra dev pytest --cov=skillroute
 uv run --extra dev ruff check . && uv run --extra dev mypy
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup (web UI, MCP
-server) and the release process.
+In a checkout, every `skillroute …` command above becomes `uv run skillroute …`. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup (web UI, MCP server) and the release
+process, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
+</details>
 
 ---
 
-<div align="center">
-<sub>MIT © <a href="https://github.com/erichare">Eric Hare</a> — for people who take their skill libraries seriously.</sub>
-</div>
+<p align="center">
+  <sub>MIT © <a href="https://github.com/erichare">Eric Hare</a> — for people who take their skill libraries seriously.</sub>
+</p>

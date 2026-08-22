@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="150" viewBox="0 0 380 150" role="img" aria-label="Install from PyPI or npm">
+  <rect x="1.5" y="1.5" width="377" height="147" rx="18" fill="#6366F1" stroke="#A5B4FC" stroke-width="3"/>
+  <text x="28" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="2.5" fill="#FFFFFF" opacity="0.82">INSTALL FROM</text>
+  <text x="28" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="#FFFFFF">PyPI · npm</text>
+  <text x="28" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" opacity="0.85">uv · uvx · pipx · pip · npx</text>
+  <rect x="280" y="33" width="84" height="84" rx="18" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1.5"/>
+  <g transform="translate(298 51)" fill="none" stroke="#6366F1" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 3 L44 14.5 V36.5 L24 48 L4 36.5 V14.5 Z"/>
+    <path d="M4 14.5 L24 26 L44 14.5"/>
+    <line x1="24" y1="26" x2="24" y2="48"/>
+  </g>
+</svg>

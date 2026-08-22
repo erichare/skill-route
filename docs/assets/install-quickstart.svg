@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="150" viewBox="0 0 380 150" role="img" aria-label="Quick start — one-line install">
+  <rect x="1.5" y="1.5" width="377" height="147" rx="18" fill="#0EA5E9" stroke="#7DD3FC" stroke-width="3"/>
+  <text x="28" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="2.5" fill="#FFFFFF" opacity="0.82">QUICK START</text>
+  <text x="28" y="92" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="#FFFFFF">One line</text>
+  <text x="28" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#FFFFFF" opacity="0.85">curl · detects your agents · backups</text>
+  <rect x="280" y="33" width="84" height="84" rx="18" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1.5"/>
+  <g transform="translate(298 51)" fill="none" stroke="#0EA5E9" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="6" width="44" height="36" rx="6"/>
+    <path d="M13 20 l7 6 -7 6"/>
+    <line x1="25" y1="32" x2="35" y2="32"/>
+  </g>
+</svg>
