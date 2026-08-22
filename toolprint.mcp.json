@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "skillroute": {
+      "command": "node",
+      "args": ["mcp/build/index.js"]
+    }
+  }
+}
